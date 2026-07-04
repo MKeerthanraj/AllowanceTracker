@@ -178,9 +178,10 @@ fun HomeScreen(
         )
     }
 
-    if (showTransactionDialog && summary != null) {
+    if (showTransactionDialog && summary != null && range != null) {
         RecordTransactionDialog(
             earnedOrDebt = summary!!.earnedOrDebt,
+            remainingAllowance = summary!!.remaining,
             initialReason = prefillReason,
             initialAmount = prefillAmount,
             initialTimestampMillis = prefillTimestamp,

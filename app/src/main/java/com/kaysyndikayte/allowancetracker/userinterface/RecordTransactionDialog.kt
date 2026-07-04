@@ -17,14 +17,13 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun RecordTransactionDialog(
     earnedOrDebt: Double,
+    remainingAllowance: Double,
     initialReason: String = "",
     initialAmount: String = "",
     initialTimestampMillis: Long? = null,
     onConfirm: (reason: String, category: Category, amount: Double, timestampMillis: Long) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Keying on the incoming values fixes prefill not applying when the dialog
-    // is shown after values arrive asynchronously (e.g. from receipt OCR).
     var reason by remember(initialReason) { mutableStateOf(initialReason) }
     var amountText by remember(initialAmount) { mutableStateOf(initialAmount) }
     var timestampMillis by remember(initialTimestampMillis) {
@@ -32,11 +31,13 @@ fun RecordTransactionDialog(
     }
     var selectedCategory by remember { mutableStateOf(Category.FOOD) }
     var expanded by remember { mutableStateOf(false) }
-    var showOverWarning by remember { mutableStateOf(false) }
+    var showDebtWarning by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
 
     val amount = amountText.toDoubleOrNull()
+    val exceedsTotalAllowance = amount != null && amount > remainingAllowance
+
     val displayFormatter = remember { DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a") }
     val displayDateTime = remember(timestampMillis) {
         Instant.ofEpochMilli(timestampMillis).atZone(ZoneId.systemDefault()).format(displayFormatter)
@@ -77,9 +78,10 @@ fun RecordTransactionDialog(
 
                 OutlinedTextField(
                     value = amountText,
-                    onValueChange = { amountText = it; showOverWarning = false },
+                    onValueChange = { amountText = it; showDebtWarning = false },
                     label = { Text("Amount") },
                     leadingIcon = { Text("₹") },
+                    isError = exceedsTotalAllowance,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -101,24 +103,34 @@ fun RecordTransactionDialog(
                     }
                 }
 
-                if (showOverWarning) {
+                // Hard block: cannot proceed at all past this
+                if (exceedsTotalAllowance) {
                     Text(
-                        "⚠ This amount exceeds your current earned allowance and will push you into debt. Confirm again to proceed.",
+                        "⛔ This amount exceeds your remaining total allowance for this period (₹${"%.2f".format(remainingAllowance)}). Please enter a smaller amount.",
                         color = Color(0xFFB00020)
+                    )
+                }
+                // Soft warning: allowed, just informs the user they'll go into debt
+                else if (showDebtWarning) {
+                    Text(
+                        "⚠ This amount exceeds your currently earned allowance and will push you into debt. Confirm again to proceed.",
+                        color = Color(0xFFF57C00)
                     )
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                val amt = amount
-                if (amt == null || amt <= 0 || reason.isBlank()) return@TextButton
-                if (amt > earnedOrDebt && !showOverWarning) {
-                    showOverWarning = true
-                } else {
-                    onConfirm(reason, selectedCategory, amt, timestampMillis)
+            TextButton(
+                enabled = amount != null && amount > 0 && reason.isNotBlank() && !exceedsTotalAllowance,
+                onClick = {
+                    val amt = amount ?: return@TextButton
+                    if (amt > earnedOrDebt && !showDebtWarning) {
+                        showDebtWarning = true
+                    } else {
+                        onConfirm(reason, selectedCategory, amt, timestampMillis)
+                    }
                 }
-            }) { Text(if (showOverWarning) "Confirm Anyway" else "Confirm") }
+            ) { Text(if (showDebtWarning) "Confirm Anyway" else "Confirm") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
@@ -132,7 +144,6 @@ fun RecordTransactionDialog(
             confirmButton = {
                 TextButton(onClick = {
                     state.selectedDateMillis?.let { pickedDateMillis ->
-                        // Merge picked date with existing time-of-day
                         val existing = Instant.ofEpochMilli(timestampMillis).atZone(ZoneId.systemDefault())
                         val pickedDate = Instant.ofEpochMilli(pickedDateMillis).atZone(ZoneId.of("UTC")).toLocalDate()
                         val merged = pickedDate.atTime(existing.toLocalTime())
