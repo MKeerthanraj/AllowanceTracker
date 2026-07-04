@@ -1,18 +1,21 @@
 package com.kaysyndikayte.allowancetracker.userinterface
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.ZoneId
 
 @Composable
 fun NewDateRangeDialog(
-    onConfirm: (startEpochDay: Long, endEpochDay: Long, amount: Double) -> Unit,
+    onConfirm: (name: String, startEpochDay: Long, endEpochDay: Long, amount: Double) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var name by remember { mutableStateOf("") }
     var startDate by remember { mutableStateOf<LocalDate?>(null) }
     var endDate by remember { mutableStateOf<LocalDate?>(null) }
     var amountText by remember { mutableStateOf("") }
@@ -20,7 +23,7 @@ fun NewDateRangeDialog(
     var showEndPicker by remember { mutableStateOf(false) }
 
     val amount = amountText.toDoubleOrNull()
-    val valid = startDate != null && endDate != null && amount != null && amount > 0 &&
+    val valid = name.isNotBlank() && startDate != null && endDate != null && amount != null && amount > 0 &&
             !endDate!!.isBefore(startDate)
 
     AlertDialog(
@@ -28,6 +31,12 @@ fun NewDateRangeDialog(
         title = { Text("New Allowance Period") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Allowance Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 OutlinedButton(onClick = { showStartPicker = true }, modifier = Modifier.fillMaxWidth()) {
                     Text(startDate?.toString() ?: "Select Start Date")
                 }
@@ -36,16 +45,21 @@ fun NewDateRangeDialog(
                 }
                 OutlinedTextField(
                     value = amountText,
-                    onValueChange = { amountText = it },
+                    onValueChange = { input ->
+                        if (input.isEmpty() || input.toDoubleOrNull() != null) {
+                            amountText = input
+                        }
+                    },
                     label = { Text("Allowance Amount") },
                     leadingIcon = { Text("₹") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
             TextButton(enabled = valid, onClick = {
-                onConfirm(startDate!!.toEpochDay(), endDate!!.toEpochDay(), amount!!)
+                onConfirm(name, startDate!!.toEpochDay(), endDate!!.toEpochDay(), amount!!)
             }) { Text("Create") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }

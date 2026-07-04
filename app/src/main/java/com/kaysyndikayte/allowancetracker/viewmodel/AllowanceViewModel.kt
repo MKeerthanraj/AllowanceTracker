@@ -6,6 +6,7 @@ import com.kaysyndikayte.allowancetracker.data.DateRangeEntity
 import com.kaysyndikayte.allowancetracker.data.TransactionEntity
 import com.kaysyndikayte.allowancetracker.repository.AllowanceRepository
 import com.kaysyndikayte.allowancetracker.utils.DateUtils
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -14,22 +15,21 @@ data class CategorySpend(val category: String, val total: Double, val percent: D
 data class RangeAnalytics(
     val totalSpent: Double,
     val perCategory: List<CategorySpend>,
-    val topCategory: CategorySpend?
+    val topCategory: CategorySpend?,
 )
 
 class AllowanceViewModel(private val repository: AllowanceRepository) : ViewModel() {
 
     private val _selectedRangeId = MutableStateFlow<Long?>(null)
-    val selectedRangeId: StateFlow<Long?> = _selectedRangeId
 
     val allDateRanges: StateFlow<List<DateRangeEntity>> = repository.getAllDateRanges()
-        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Auto-select the most recent range once ranges load, if nothing selected yet
     init {
         viewModelScope.launch {
             allDateRanges.collect { ranges ->
-                if (_selectedRangeId.value == null && ranges.isNotEmpty()) {
+                if ((_selectedRangeId.value == null) && ranges.isNotEmpty()) {
                     _selectedRangeId.value = ranges.first().id
                 }
             }
@@ -38,63 +38,84 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
 
     fun selectRange(id: Long) { _selectedRangeId.value = id }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val selectedRange: StateFlow<DateRangeEntity?> = _selectedRangeId
         .flatMapLatest { id -> if (id == null) flowOf(null) else repository.getDateRange(id) }
-        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val transactionsForSelectedRange: StateFlow<List<TransactionEntity>> = _selectedRangeId
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repository.getTransactions(id) }
-        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** perDay, earnedOrDebt, remaining */
     data class AllowanceSummary(
         val perDayAllowance: Double,
         val earnedOrDebt: Double,
         val remaining: Double,
-        val totalSpent: Double
+        val totalSpent: Double,
+        val isEnded: Boolean
     )
 
     val summary: StateFlow<AllowanceSummary?> = combine(
         selectedRange, transactionsForSelectedRange
     ) { range, transactions ->
         if (range == null) return@combine null
+        val today = java.time.LocalDate.now().toEpochDay()
+        val isEnded = range.isForceEnded || today > range.endEpochDay
+
         val totalDays = DateUtils.totalDays(range.startEpochDay, range.endEpochDay)
         val perDay = if (totalDays > 0) range.allowanceAmount / totalDays else 0.0
         val elapsed = DateUtils.daysElapsed(range.startEpochDay, range.endEpochDay)
         val totalSpent = transactions.sumOf { it.amount }
         val earned = (perDay * elapsed) - totalSpent
         val remaining = range.allowanceAmount - totalSpent
-        AllowanceSummary(perDay, earned, remaining, totalSpent)
+        AllowanceSummary(perDay, earned, remaining, totalSpent, isEnded)
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
 
     val analytics: StateFlow<RangeAnalytics?> = transactionsForSelectedRange.map { transactions ->
         if (transactions.isEmpty()) return@map RangeAnalytics(0.0, emptyList(), null)
         val total = transactions.sumOf { it.amount }
-        val grouped = transactions.groupBy { it.category }
+        val grouped = transactions.asSequence().groupBy { it.category }
             .map { (cat, list) ->
                 val sum = list.sumOf { it.amount }
                 CategorySpend(cat, sum, if (total > 0) (sum / total) * 100 else 0.0)
             }
+            .toList()
             .sortedByDescending { it.total }
         RangeAnalytics(total, grouped, grouped.firstOrNull())
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
 
-    fun addDateRange(startEpochDay: Long, endEpochDay: Long, amount: Double) {
+    fun addDateRange(name: String, startEpochDay: Long, endEpochDay: Long, amount: Double) {
         viewModelScope.launch {
             val newId = repository.addDateRange(
-                DateRangeEntity(startEpochDay = startEpochDay, endEpochDay = endEpochDay, allowanceAmount = amount)
+                DateRangeEntity(
+                    name = name,
+                    startEpochDay = startEpochDay,
+                    endEpochDay = endEpochDay,
+                    allowanceAmount = amount
+                )
             )
             _selectedRangeId.value = newId
         }
     }
 
-    fun addTransaction(reason: String, category: String, amount: Double) {
+    fun forceEndCurrentRange() {
+        val range = selectedRange.value ?: return
+        viewModelScope.launch {
+            repository.updateDateRange(range.copy(isForceEnded = true))
+        }
+    }
+
+    fun addTransaction(reason: String, category: String, amount: Double, timestampMillis: Long) {
         val rangeId = _selectedRangeId.value ?: return
         viewModelScope.launch {
             repository.addTransaction(
                 TransactionEntity(
                     dateRangeId = rangeId,
-                    dateEpochDay = java.time.LocalDate.now().toEpochDay(),
+                    dateEpochDay = java.time.Instant.ofEpochMilli(timestampMillis)
+                        .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay(),
+                    timestampMillis = timestampMillis,
                     reason = reason,
                     category = category,
                     amount = amount

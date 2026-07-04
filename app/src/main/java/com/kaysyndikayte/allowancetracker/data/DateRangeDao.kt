@@ -14,6 +14,9 @@ interface DateRangeDao {
     @Query("SELECT * FROM date_ranges WHERE id = :id")
     fun getById(id: Long): Flow<DateRangeEntity?>
 
+    @Update
+    suspend fun update(range: DateRangeEntity)
+
     @Delete
     suspend fun delete(range: DateRangeEntity)
 }

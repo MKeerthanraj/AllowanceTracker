@@ -19,37 +19,73 @@ import com.kaysyndikayte.allowancetracker.utils.DateUtils
 import com.kaysyndikayte.allowancetracker.viewmodel.AllowanceViewModel
 import java.text.NumberFormat
 import java.util.Locale
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
+import com.kaysyndikayte.allowancetracker.utils.ReceiptParser
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import com.kaysyndikayte.allowancetracker.ui.RecordTransactionDialog
 
 private fun money(v: Double): String =
     NumberFormat.getCurrencyInstance(Locale.Builder().setLanguage("en").setRegion("IN").build()).format(v)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: AllowanceViewModel, onOpenAnalytics: () -> Unit, onOpenHistory: () -> Unit) {
+fun HomeScreen(
+    viewModel: AllowanceViewModel,
+    sharedImageUri: Uri?,
+    onImageConsumed: () -> Unit,
+    onOpenAnalytics: () -> Unit,
+    onOpenHistory: () -> Unit
+) {
     val range by viewModel.selectedRange.collectAsState()
     val summary by viewModel.summary.collectAsState()
     val transactions by viewModel.transactionsForSelectedRange.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var showNewRangeDialog by remember { mutableStateOf(false) }
     var showTransactionDialog by remember { mutableStateOf(false) }
+    var prefillReason by remember { mutableStateOf("") }
+    var prefillAmount by remember { mutableStateOf("") }
+    var prefillTimestamp by remember { mutableStateOf<Long?>(null) }
+
+    // Whenever a receipt image is shared in, parse it and open the dialog pre-filled
+    LaunchedEffect(sharedImageUri) {
+        val uri = sharedImageUri ?: return@LaunchedEffect
+        scope.launch {
+            val parsed = ReceiptParser.parse(context, uri)
+            prefillReason = parsed.reason ?: ""
+            prefillAmount = parsed.amount?.toString() ?: ""
+            prefillTimestamp = parsed.timestampMillis
+            showTransactionDialog = true
+            onImageConsumed()
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    Column {
                         Text(
-                            text = range?.let { DateUtils.formatRange(it.startEpochDay, it.endEpochDay) } ?: "No range set",
-                            style = MaterialTheme.typography.bodyMedium
+                            text = range?.name ?: "No range set",
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Text(
-                            text = summary?.let { money(it.remaining) } ?: "-",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = range?.let { DateUtils.formatRange(it.startEpochDay, it.endEpochDay) } ?: "-",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                text = summary?.let { money(it.remaining) } ?: "-",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -83,15 +119,29 @@ fun HomeScreen(viewModel: AllowanceViewModel, onOpenAnalytics: () -> Unit, onOpe
             Spacer(Modifier.height(16.dp))
             summary?.let {
                 Text("Per day allowance: ${money(it.perDayAllowance)}", style = MaterialTheme.typography.bodySmall)
+                if (it.isEnded) {
+                    Text("This period has ended", color = Color.Red, fontWeight = FontWeight.Bold)
+                }
             }
 
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = { showTransactionDialog = true },
-                enabled = range != null,
+                enabled = range != null && summary?.isEnded == false,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Record Transaction")
+            }
+
+            if (range != null && summary?.isEnded == false) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { viewModel.forceEndCurrentRange() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                ) {
+                    Text("End Period Early")
+                }
             }
 
             Spacer(Modifier.height(24.dp))
@@ -101,13 +151,18 @@ fun HomeScreen(viewModel: AllowanceViewModel, onOpenAnalytics: () -> Unit, onOpe
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
                 items(transactions) { tx ->
                     val cat = Category.valueOf(tx.category)
+                    val dateTimeStr = remember(tx.timestampMillis) {
+                        java.time.Instant.ofEpochMilli(tx.timestampMillis)
+                            .atZone(java.time.ZoneId.systemDefault())
+                            .format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a"))
+                    }
                     ListItem(
                         headlineContent = { Text(tx.reason) },
-                        supportingContent = { Text(cat.displayName) },
+                        supportingContent = { Text("${cat.displayName} • $dateTimeStr") },
                         leadingContent = { Icon(cat.icon, contentDescription = null) },
                         trailingContent = { Text(money(tx.amount)) }
                     )
-                    HorizontalDivider()
+                    Divider()
                 }
             }
         }
@@ -115,8 +170,8 @@ fun HomeScreen(viewModel: AllowanceViewModel, onOpenAnalytics: () -> Unit, onOpe
 
     if (showNewRangeDialog) {
         NewDateRangeDialog(
-            onConfirm = { start, end, amount ->
-                viewModel.addDateRange(start, end, amount)
+            onConfirm = { name, start, end, amount ->
+                viewModel.addDateRange(name, start, end, amount)
                 showNewRangeDialog = false
             },
             onDismiss = { showNewRangeDialog = false }
@@ -126,11 +181,22 @@ fun HomeScreen(viewModel: AllowanceViewModel, onOpenAnalytics: () -> Unit, onOpe
     if (showTransactionDialog && summary != null) {
         RecordTransactionDialog(
             earnedOrDebt = summary!!.earnedOrDebt,
-            onConfirm = { reason, category, amount ->
-                viewModel.addTransaction(reason, category.name, amount)
+            initialReason = prefillReason,
+            initialAmount = prefillAmount,
+            initialTimestampMillis = prefillTimestamp,
+            onConfirm = { reason, category, amount, timestamp ->
+                viewModel.addTransaction(reason, category.name, amount, timestamp)
                 showTransactionDialog = false
+                prefillReason = ""
+                prefillAmount = ""
+                prefillTimestamp = null
             },
-            onDismiss = { showTransactionDialog = false }
+            onDismiss = {
+                showTransactionDialog = false
+                prefillReason = ""
+                prefillAmount = ""
+                prefillTimestamp = null
+            }
         )
     }
 }

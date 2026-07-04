@@ -16,6 +16,8 @@ class AllowanceRepository(
 
     suspend fun addDateRange(range: DateRangeEntity): Long = dateRangeDao.insert(range)
 
+    suspend fun updateDateRange(range: DateRangeEntity) = dateRangeDao.update(range)
+
     suspend fun addTransaction(transaction: TransactionEntity) =
         transactionDao.insert(transaction)
 

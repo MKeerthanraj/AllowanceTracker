@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [DateRangeEntity::class, TransactionEntity::class],
-    version = 1
+    version = 3
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dateRangeDao(): DateRangeDao
@@ -22,7 +22,8 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "allowance_tracker_db"
-                ).build().also { INSTANCE = it }
+                )
+                    .build().also { INSTANCE = it }
             }
     }
 }

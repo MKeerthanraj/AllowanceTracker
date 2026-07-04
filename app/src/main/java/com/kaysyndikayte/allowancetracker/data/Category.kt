@@ -15,5 +15,6 @@ enum class Category(val displayName: String, val icon: ImageVector) {
     EDUCATION("Education", Icons.Filled.School),
     RENT("Rent", Icons.Filled.Home),
     SUBSCRIPTIONS("Subscriptions", Icons.Filled.Subscriptions),
+    PERSONAL("Personal", Icons.Filled.Person),
     OTHER("Other", Icons.Filled.Category)
 }

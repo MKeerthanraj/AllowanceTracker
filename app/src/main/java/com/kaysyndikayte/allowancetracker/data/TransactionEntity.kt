@@ -8,7 +8,8 @@ data class TransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val dateRangeId: Long,
     val dateEpochDay: Long,
+    val timestampMillis: Long, // exact date + time of transaction
     val reason: String,
-    val category: String,   // Category enum name
+    val category: String,
     val amount: Double
 )
