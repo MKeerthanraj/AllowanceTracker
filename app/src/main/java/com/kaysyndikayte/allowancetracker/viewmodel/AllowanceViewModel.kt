@@ -54,6 +54,7 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
         val earnedOrDebt: Double,
         val remaining: Double,
         val totalSpent: Double,
+        val daysToClearDebt: Int?,  // null when not in debt, or when debt can't be cleared before period ends
         val isEnded: Boolean
     )
 
@@ -61,16 +62,22 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
         selectedRange, transactionsForSelectedRange
     ) { range, transactions ->
         if (range == null) return@combine null
-        val today = java.time.LocalDate.now().toEpochDay()
-        val isEnded = range.isForceEnded || today > range.endEpochDay
-
         val totalDays = DateUtils.totalDays(range.startEpochDay, range.endEpochDay)
         val perDay = if (totalDays > 0) range.allowanceAmount / totalDays else 0.0
         val elapsed = DateUtils.daysElapsed(range.startEpochDay, range.endEpochDay)
         val totalSpent = transactions.sumOf { it.amount }
         val earned = (perDay * elapsed) - totalSpent
         val remaining = range.allowanceAmount - totalSpent
-        AllowanceSummary(perDay, earned, remaining, totalSpent, isEnded)
+
+        val daysToClear: Int? = if (earned < 0 && perDay > 0) {
+            val daysNeeded = kotlin.math.ceil(kotlin.math.abs(earned) / perDay).toInt()
+            val daysLeftInPeriod = (totalDays - elapsed).toInt()
+            if (daysNeeded <= daysLeftInPeriod) daysNeeded else null // can't clear before period ends
+        } else null
+
+        val isEnded = range.isForceEnded || java.time.LocalDate.now().toEpochDay() > range.endEpochDay
+
+        AllowanceSummary(perDay, earned, remaining, totalSpent, daysToClear, isEnded)
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
 
     val analytics: StateFlow<RangeAnalytics?> = transactionsForSelectedRange.map { transactions ->

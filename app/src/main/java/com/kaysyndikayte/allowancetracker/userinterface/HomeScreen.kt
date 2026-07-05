@@ -116,6 +116,25 @@ fun HomeScreen(
                 color = if (earned >= 0) Color(0xFF2E7D32) else Color(0xFFC62828)
             )
 
+            if (earned < 0) {
+                Spacer(Modifier.height(4.dp))
+                summary?.daysToClearDebt?.let { days ->
+                    Text(
+                        text = if (days == 1) "1 day until you're back in the green"
+                        else "$days days until you're back in the green",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF757575)
+                    )
+                } ?: run {
+                    // daysToClearDebt is null while in debt only when it can't clear before period ends
+                    Text(
+                        text = "At this rate, debt won't clear before the period ends",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFC62828)
+                    )
+                }
+            }
+
             Spacer(Modifier.height(16.dp))
             summary?.let {
                 Text("Per day allowance: ${money(it.perDayAllowance)}", style = MaterialTheme.typography.bodySmall)
