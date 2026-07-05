@@ -1,14 +1,14 @@
 package com.kaysyndikayte.allowancetracker.userinterface
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.ZoneId
+import androidx.compose.material3.SelectableDates
 
 @Composable
 fun NewDateRangeDialog(
@@ -21,44 +21,72 @@ fun NewDateRangeDialog(
     var amountText by remember { mutableStateOf("") }
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
+    var attemptedSubmit by remember { mutableStateOf(false) }
 
     val amount = amountText.toDoubleOrNull()
-    val valid = name.isNotBlank() && startDate != null && endDate != null && amount != null && amount > 0 &&
-            !endDate!!.isBefore(startDate)
+
+    val nameError = attemptedSubmit && name.isBlank()
+    val startError = attemptedSubmit && startDate == null
+    val endError = attemptedSubmit && (endDate == null || (startDate != null && endDate!!.isBefore(startDate)))
+    val amountError = attemptedSubmit && (amount == null || amount <= 0)
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("New Allowance Period") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Allowance Name") },
+                    label = { Text("Period Name (e.g., Feb 2024)") },
+                    isError = nameError,
+                    supportingText = { if (nameError) Text("Name is required") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedButton(onClick = { showStartPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                Spacer(Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = { showStartPicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = if (startError) ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB00020)) else ButtonDefaults.outlinedButtonColors()
+                ) {
                     Text(startDate?.toString() ?: "Select Start Date")
                 }
-                OutlinedButton(onClick = { showEndPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                if (startError) {
+                    Text("Start date is required", color = Color(0xFFB00020), style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = { showEndPicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = if (endError) ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB00020)) else ButtonDefaults.outlinedButtonColors()
+                ) {
                     Text(endDate?.toString() ?: "Select End Date")
                 }
+                if (endError) {
+                    Text("End date is required and must be after start date", color = Color(0xFFB00020), style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(8.dp))
+
                 OutlinedTextField(
                     value = amountText,
-                    onValueChange = { input ->
-                        if (input.isEmpty() || input.toDoubleOrNull() != null) {
-                            amountText = input
-                        }
-                    },
+                    onValueChange = { amountText = it },
                     label = { Text("Allowance Amount") },
                     leadingIcon = { Text("₹") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    isError = amountError,
+                    supportingText = { if (amountError) Text("Enter a valid amount") },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = {
+            TextButton(onClick = {
+                attemptedSubmit = true
+                val hasErrors = name.isBlank() || startDate == null || endDate == null ||
+                        endDate!!.isBefore(startDate) ||
+                        amount == null || amount <= 0
+                if (hasErrors) return@TextButton
                 onConfirm(name, startDate!!.toEpochDay(), endDate!!.toEpochDay(), amount!!)
             }) { Text("Create") }
         },
@@ -73,6 +101,7 @@ fun NewDateRangeDialog(
     }
     if (showEndPicker) {
         DatePickerModal(
+            minSelectableEpochDay = startDate?.toEpochDay(),
             onDateSelected = { endDate = it; showEndPicker = false },
             onDismiss = { showEndPicker = false }
         )
@@ -81,8 +110,21 @@ fun NewDateRangeDialog(
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun DatePickerModal(onDateSelected: (LocalDate) -> Unit, onDismiss: () -> Unit) {
-    val state = rememberDatePickerState()
+fun DatePickerModal(
+    minSelectableEpochDay: Long? = null,
+    onDateSelected: (LocalDate) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val state = rememberDatePickerState(
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                if (minSelectableEpochDay == null) return true
+                val candidateEpochDay = java.time.Instant.ofEpochMilli(utcTimeMillis)
+                    .atZone(ZoneId.of("UTC")).toLocalDate().toEpochDay()
+                return candidateEpochDay >= minSelectableEpochDay
+            }
+        }
+    )
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {

@@ -29,14 +29,19 @@ fun RecordTransactionDialog(
     var timestampMillis by remember(initialTimestampMillis) {
         mutableStateOf(initialTimestampMillis ?: System.currentTimeMillis())
     }
-    var selectedCategory by remember { mutableStateOf(Category.FOOD) }
+    var selectedCategory by remember { mutableStateOf(Category.SELECT_CATEGORY) }
     var expanded by remember { mutableStateOf(false) }
     var showDebtWarning by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var attemptedSubmit by remember { mutableStateOf(false) }
 
     val amount = amountText.toDoubleOrNull()
     val exceedsTotalAllowance = amount != null && amount > remainingAllowance
+
+    val reasonError = attemptedSubmit && reason.isBlank()
+    val amountError = attemptedSubmit && (amount == null || amount <= 0)
+    val categoryError = attemptedSubmit && selectedCategory == Category.SELECT_CATEGORY
 
     val displayFormatter = remember { DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a") }
     val displayDateTime = remember(timestampMillis) {
@@ -47,13 +52,16 @@ fun RecordTransactionDialog(
         onDismissRequest = onDismiss,
         title = { Text("Record Transaction") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 OutlinedTextField(
                     value = reason,
                     onValueChange = { reason = it },
                     label = { Text("Reason") },
+                    isError = reasonError,
+                    supportingText = { if (reasonError) Text("Reason is required") },
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(8.dp))
 
                 ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
                     OutlinedTextField(
@@ -61,12 +69,14 @@ fun RecordTransactionDialog(
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Category") },
+                        isError = categoryError,
+                        supportingText = { if (categoryError) Text("Please select a category") },
                         leadingIcon = { Icon(selectedCategory.icon, contentDescription = null) },
                         trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
                         modifier = Modifier.menuAnchor().fillMaxWidth()
                     )
                     ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        Category.values().forEach { cat ->
+                        Category.values().filter { it != Category.SELECT_CATEGORY }.forEach { cat ->
                             DropdownMenuItem(
                                 text = { Text(cat.displayName) },
                                 leadingIcon = { Icon(cat.icon, contentDescription = null) },
@@ -75,15 +85,23 @@ fun RecordTransactionDialog(
                         }
                     }
                 }
+                Spacer(Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it; showDebtWarning = false },
                     label = { Text("Amount") },
                     leadingIcon = { Text("₹") },
-                    isError = exceedsTotalAllowance,
+                    isError = amountError || exceedsTotalAllowance,
+                    supportingText = {
+                        when {
+                            amountError -> Text("Enter a valid amount")
+                            exceedsTotalAllowance -> Text("Exceeds remaining allowance (₹${"%.2f".format(remainingAllowance)})")
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(8.dp))
 
                 Text("Date & Time", style = MaterialTheme.typography.labelMedium)
                 Text(displayDateTime, style = MaterialTheme.typography.bodyMedium)
@@ -103,15 +121,8 @@ fun RecordTransactionDialog(
                     }
                 }
 
-                // Hard block: cannot proceed at all past this
-                if (exceedsTotalAllowance) {
-                    Text(
-                        "⛔ This amount exceeds your remaining total allowance for this period (₹${"%.2f".format(remainingAllowance)}). Please enter a smaller amount.",
-                        color = Color(0xFFB00020)
-                    )
-                }
-                // Soft warning: allowed, just informs the user they'll go into debt
-                else if (showDebtWarning) {
+                if (showDebtWarning && !exceedsTotalAllowance) {
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         "⚠ This amount exceeds your currently earned allowance and will push you into debt. Confirm again to proceed.",
                         color = Color(0xFFF57C00)
@@ -120,17 +131,21 @@ fun RecordTransactionDialog(
             }
         },
         confirmButton = {
-            TextButton(
-                enabled = amount != null && amount > 0 && reason.isNotBlank() && !exceedsTotalAllowance,
-                onClick = {
-                    val amt = amount ?: return@TextButton
-                    if (amt > earnedOrDebt && !showDebtWarning) {
-                        showDebtWarning = true
-                    } else {
-                        onConfirm(reason, selectedCategory, amt, timestampMillis)
-                    }
+            TextButton(onClick = {
+                attemptedSubmit = true
+                val amt = amount
+                val hasErrors = reason.isBlank() ||
+                        amt == null || amt <= 0 ||
+                        selectedCategory == Category.SELECT_CATEGORY ||
+                        exceedsTotalAllowance
+                if (hasErrors) return@TextButton
+
+                if (amt!! > earnedOrDebt && !showDebtWarning) {
+                    showDebtWarning = true
+                } else {
+                    onConfirm(reason, selectedCategory, amt, timestampMillis)
                 }
-            ) { Text(if (showDebtWarning) "Confirm Anyway" else "Confirm") }
+            }) { Text(if (showDebtWarning) "Confirm Anyway" else "Confirm") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

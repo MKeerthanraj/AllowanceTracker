@@ -1,90 +1,91 @@
 package com.kaysyndikayte.allowancetracker.userinterface
 
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.kaysyndikayte.allowancetracker.data.DateRangeEntity
+import com.kaysyndikayte.allowancetracker.ui.LiveIndicatorDot
 import com.kaysyndikayte.allowancetracker.utils.DateUtils
 import com.kaysyndikayte.allowancetracker.viewmodel.AllowanceViewModel
 import java.text.NumberFormat
-import java.time.LocalDate
 import java.util.Locale
-import androidx.compose.foundation.clickable
 
-@Composable
-fun BlinkingDot() {
-    val infiniteTransition = rememberInfiniteTransition(label = "blinking")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "alpha"
-    )
-    Box(
-        modifier = Modifier
-            .size(8.dp)
-            .alpha(alpha)
-            .background(Color.Green, CircleShape)
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HistoryScreen(viewModel: AllowanceViewModel, onBack: () -> Unit, onSelectRange: () -> Unit) {
     val ranges by viewModel.allDateRanges.collectAsState()
-    val money = NumberFormat.getCurrencyInstance(Locale.Builder().setLanguage("en").setRegion("IN").build())
-    val today = LocalDate.now().toEpochDay()
+    val money = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
+
+    var rangeToDelete by remember { mutableStateOf<DateRangeEntity?>(null) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Allowance Periods") },
+                title = { Text("All Date Ranges") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
                 }
             )
         }
     ) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-            items(ranges) { range ->
-                val isActive = (!range.isForceEnded) && (today <= range.endEpochDay)
+            items(ranges, key = { it.id }) { range ->
+                val isLive = DateUtils.isLive(range.startEpochDay, range.endEpochDay)
                 ListItem(
                     headlineContent = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(range.name)
-                            if (isActive) {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Text(DateUtils.formatRange(range.startEpochDay, range.endEpochDay))
+                            if (isLive) {
                                 Spacer(Modifier.width(8.dp))
-                                BlinkingDot()
+                                LiveIndicatorDot()
                             }
                         }
                     },
-                    supportingContent = {
-                        Column {
-                            Text(DateUtils.formatRange(range.startEpochDay, range.endEpochDay))
-                            Text("Allowance: ${money.format(range.allowanceAmount)}")
-                        }
-                    },
-                    modifier = Modifier.clickable {
-                        viewModel.selectRange(range.id)
-                        onSelectRange()
-                    }
+                    supportingContent = { Text("Allowance: ${money.format(range.allowanceAmount)}") },
+                    modifier = Modifier.combinedClickable(
+                        onClick = {
+                            viewModel.selectRange(range.id)
+                            onSelectRange()
+                        },
+                        onLongClick = { rangeToDelete = range }
+                    )
                 )
-                HorizontalDivider()
+                Divider()
             }
         }
+    }
+
+    rangeToDelete?.let { range ->
+        val isLive = DateUtils.isLive(range.startEpochDay, range.endEpochDay)
+        AlertDialog(
+            onDismissRequest = { rangeToDelete = null },
+            title = { Text(if (isLive) "End this active period?" else "Delete this period?") },
+            text = {
+                Text(
+                    if (isLive) {
+                        "This allowance period is currently live. Are you sure you want to end it and delete it? All its transactions will be removed too."
+                    } else {
+                        "Are you sure you want to delete this period (${DateUtils.formatRange(range.startEpochDay, range.endEpochDay)})? All its transactions will be removed too."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteDateRange(range)
+                    rangeToDelete = null
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { rangeToDelete = null }) { Text("Cancel") }
+            }
+        )
     }
 }

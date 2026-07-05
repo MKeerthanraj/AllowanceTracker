@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.vector.ImageVector
 
 enum class Category(val displayName: String, val icon: ImageVector) {
+    SELECT_CATEGORY("Select a category", Icons.Filled.QuestionMark),
     FOOD("Food & Dining", Icons.Filled.Restaurant),
     TRANSPORT("Transport", Icons.Filled.DirectionsCar),
     SHOPPING("Shopping", Icons.Filled.ShoppingBag),

@@ -24,4 +24,9 @@ object DateUtils {
             else -> (today - startEpochDay) + 1
         }
     }
+
+    fun isLive(startEpochDay: Long, endEpochDay: Long): Boolean {
+        val today = LocalDate.now().toEpochDay()
+        return today in startEpochDay..endEpochDay
+    }
 }

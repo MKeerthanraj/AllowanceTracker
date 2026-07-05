@@ -123,4 +123,14 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
             )
         }
     }
+
+    fun deleteDateRange(range: DateRangeEntity) {
+        viewModelScope.launch {
+            repository.deleteDateRange(range)
+            // If the deleted range was selected, clear selection so the app picks a new one
+            if (_selectedRangeId.value == range.id) {
+                _selectedRangeId.value = null
+            }
+        }
+    }
 }
