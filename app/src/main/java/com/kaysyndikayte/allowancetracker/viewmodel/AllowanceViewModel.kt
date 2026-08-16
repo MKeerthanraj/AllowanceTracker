@@ -93,6 +93,13 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
         RangeAnalytics(total, grouped, grouped.firstOrNull())
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
 
+    private val _eventFlow = MutableSharedFlow<AllowanceEvent>()
+    val eventFlow = _eventFlow.asSharedFlow()
+
+    sealed class AllowanceEvent {
+        data class DuplicateTransaction(val reason: String, val amount: Double) : AllowanceEvent()
+    }
+
     fun addDateRange(name: String, startEpochDay: Long, endEpochDay: Long, amount: Double) {
         viewModelScope.launch {
             val newId = repository.addDateRange(
@@ -117,6 +124,10 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
     fun addTransaction(reason: String, category: String, amount: Double, timestampMillis: Long) {
         val rangeId = _selectedRangeId.value ?: return
         viewModelScope.launch {
+            if (repository.transactionExistsWithTimestamp(timestampMillis)) {
+                _eventFlow.emit(AllowanceEvent.DuplicateTransaction(reason, amount))
+                return@launch
+            }
             repository.addTransaction(
                 TransactionEntity(
                     dateRangeId = rangeId,
@@ -128,6 +139,12 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
                     amount = amount
                 )
             )
+        }
+    }
+
+    fun deleteTransaction(transaction: TransactionEntity) {
+        viewModelScope.launch {
+            repository.deleteTransaction(transaction)
         }
     }
 

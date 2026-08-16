@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +26,9 @@ import com.kaysyndikayte.allowancetracker.utils.ReceiptParser
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import com.kaysyndikayte.allowancetracker.ui.RecordTransactionDialog
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.background
 
 private fun money(v: Double): String =
     NumberFormat.getCurrencyInstance(Locale.Builder().setLanguage("en").setRegion("IN").build()).format(v)
@@ -36,19 +40,34 @@ fun HomeScreen(
     sharedImageUri: Uri?,
     onImageConsumed: () -> Unit,
     onOpenAnalytics: () -> Unit,
-    onOpenHistory: () -> Unit
+    onOpenHistory: () -> Unit,
+    onOpenGroups: () -> Unit
 ) {
     val range by viewModel.selectedRange.collectAsState()
     val summary by viewModel.summary.collectAsState()
     val transactions by viewModel.transactionsForSelectedRange.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var showNewRangeDialog by remember { mutableStateOf(false) }
     var showTransactionDialog by remember { mutableStateOf(false) }
     var prefillReason by remember { mutableStateOf("") }
     var prefillAmount by remember { mutableStateOf("") }
     var prefillTimestamp by remember { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(viewModel.eventFlow) {
+        viewModel.eventFlow.collect { event ->
+            when (event) {
+                is AllowanceViewModel.AllowanceEvent.DuplicateTransaction -> {
+                    snackbarHostState.showSnackbar(
+                        message = "Duplicate transaction detected: ${event.reason} (${money(event.amount)})",
+                        duration = SnackbarDuration.Short
+                    )
+                }
+            }
+        }
+    }
 
     // Whenever a receipt image is shared in, parse it and open the dialog pre-filled
     LaunchedEffect(sharedImageUri) {
@@ -64,6 +83,7 @@ fun HomeScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -89,6 +109,7 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenGroups) { Icon(Icons.Filled.Groups, contentDescription = "Groups") }
                     IconButton(onClick = onOpenHistory) { Icon(Icons.Filled.History, contentDescription = "History") }
                     IconButton(onClick = onOpenAnalytics) { Icon(Icons.Filled.BarChart, contentDescription = "Analytics") }
                     IconButton(onClick = { showNewRangeDialog = true }) { Icon(Icons.Filled.Add, contentDescription = "New Range") }
@@ -168,20 +189,60 @@ fun HomeScreen(
             Spacer(Modifier.height(8.dp))
 
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                items(transactions) { tx ->
+                items(transactions, key = { it.id }) { tx ->
                     val cat = Category.valueOf(tx.category)
                     val dateTimeStr = remember(tx.timestampMillis) {
                         java.time.Instant.ofEpochMilli(tx.timestampMillis)
                             .atZone(java.time.ZoneId.systemDefault())
                             .format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a"))
                     }
-                    ListItem(
-                        headlineContent = { Text(tx.reason) },
-                        supportingContent = { Text("${cat.displayName} • $dateTimeStr") },
-                        leadingContent = { Icon(cat.icon, contentDescription = null) },
-                        trailingContent = { Text(money(tx.amount)) }
+
+                    val dismissState = rememberSwipeToDismissBoxState(
+                        confirmValueChange = {
+                            if (it == SwipeToDismissBoxValue.EndToStart) {
+                                viewModel.deleteTransaction(tx)
+                                true
+                            } else {
+                                false
+                            }
+                        }
                     )
-                    Divider()
+
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        enableDismissFromStartToEnd = false,
+                        backgroundContent = {
+                            val color = when (dismissState.dismissDirection) {
+                                SwipeToDismissBoxValue.EndToStart -> Color.Red
+                                else -> Color.Transparent
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(color)
+                                    .padding(horizontal = 20.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Delete",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    ) {
+                        Surface(color = MaterialTheme.colorScheme.surface) {
+                            Column {
+                                ListItem(
+                                    headlineContent = { Text(tx.reason) },
+                                    supportingContent = { Text("${cat.displayName} • $dateTimeStr") },
+                                    leadingContent = { Icon(cat.icon, contentDescription = null) },
+                                    trailingContent = { Text(money(tx.amount)) }
+                                )
+                                HorizontalDivider()
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -21,6 +21,9 @@ class AllowanceRepository(
     suspend fun addTransaction(transaction: TransactionEntity) =
         transactionDao.insert(transaction)
 
+    suspend fun transactionExistsWithTimestamp(timestamp: Long): Boolean =
+        transactionDao.existsWithTimestamp(timestamp)
+
     suspend fun deleteDateRange(range: DateRangeEntity) = dateRangeDao.delete(range)
 
     suspend fun deleteTransaction(transaction: TransactionEntity) =
