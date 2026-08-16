@@ -17,5 +17,12 @@ enum class Category(val displayName: String, val icon: ImageVector) {
     RENT("Rent", Icons.Filled.Home),
     SUBSCRIPTIONS("Subscriptions", Icons.Filled.Subscriptions),
     PERSONAL("Personal", Icons.Filled.Person),
-    OTHER("Other", Icons.Filled.Category)
+    OTHER("Other", Icons.Filled.Category);
+
+    companion object {
+        /** Category names are stored as plain strings in the transactions table, so a value
+         *  written by an older build (or a since-renamed constant) arrives as something
+         *  valueOf() throws on -- which took down the entire list being rendered. */
+        fun fromName(name: String): Category = entries.firstOrNull { it.name == name } ?: OTHER
+    }
 }

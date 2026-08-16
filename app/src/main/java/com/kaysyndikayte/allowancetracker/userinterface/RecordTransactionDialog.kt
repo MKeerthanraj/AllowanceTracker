@@ -73,7 +73,9 @@ fun RecordTransactionDialog(
                         supportingText = { if (categoryError) Text("Please select a category") },
                         leadingIcon = { Icon(selectedCategory.icon, contentDescription = null) },
                         trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                        modifier = Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth()
                     )
                     ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         Category.values().filter { it != Category.SELECT_CATEGORY }.forEach { cat ->
