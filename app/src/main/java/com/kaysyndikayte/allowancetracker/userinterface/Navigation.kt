@@ -38,13 +38,13 @@ fun AppNavHost(
 
     NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
-            HomeScreen(
+            MainScreen(
                 viewModel = viewModel,
                 sharedImageUri = sharedImageUri,
                 onImageConsumed = onImageConsumed,
                 onOpenAnalytics = { navController.navigate(Routes.ANALYTICS) },
                 onOpenHistory = { navController.navigate(Routes.HISTORY) },
-                onOpenGroups = { navController.navigate(Routes.GROUPS) }
+                onOpenGroup = { groupId -> navController.navigate(Routes.groupDetail(groupId)) }
             )
         }
         composable(Routes.ANALYTICS) {
@@ -55,12 +55,6 @@ fun AppNavHost(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
                 onSelectRange = { navController.popBackStack(Routes.HOME, false) }
-            )
-        }
-        composable(Routes.GROUPS) {
-            GroupsScreen(
-                onBack = { navController.popBackStack() },
-                onOpenGroup = { groupId -> navController.navigate(Routes.groupDetail(groupId)) }
             )
         }
         composable(

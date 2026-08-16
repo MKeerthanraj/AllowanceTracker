@@ -3,7 +3,9 @@ package com.kaysyndikayte.allowancetracker.userinterface
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -11,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.kaysyndikayte.allowancetracker.logic.ReceiptItem
 import com.kaysyndikayte.allowancetracker.logic.SplitCalculator
@@ -30,19 +33,33 @@ fun ItemSplitScreen(
     parsedItems: List<Pair<String, BigDecimal>>,
     taxAmount: BigDecimal,
     groupMembers: List<Pair<String, String>>,
-    onConfirm: (items: List<ReceiptItem>, amounts: Map<String, BigDecimal>) -> Unit,
+    onConfirm: (name: String, items: List<ReceiptItem>, amounts: Map<String, BigDecimal>) -> Unit,
     onBack: () -> Unit
 ) {
     var items by remember {
         mutableStateOf(parsedItems.map { (name, price) -> EditableItem(name = name, price = price) })
     }
+    var expenseName by remember { mutableStateOf("") }
     var taxText by remember { mutableStateOf(taxAmount.toPlainString()) }
     var editingItem by remember { mutableStateOf<EditableItem?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    val itemsSubtotal = items.fold(BigDecimal.ZERO) { acc, item -> acc.add(item.price) }
+    val tax = taxText.toAmountOrNull() ?: BigDecimal.ZERO
+    val runningTotal = itemsSubtotal.add(tax)
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Who had what?") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Who had what?") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(Icons.Filled.Add, contentDescription = "Add item")
@@ -52,15 +69,39 @@ fun ItemSplitScreen(
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
 
             OutlinedTextField(
+                value = expenseName,
+                onValueChange = { expenseName = it },
+                label = { Text("What was this for?") },
+                placeholder = { Text("Dinner at Empire") },
+                singleLine = true,
+                isError = error != null && expenseName.isBlank(),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedTextField(
                 value = taxText,
-                onValueChange = { taxText = it },
-                label = { Text("Tax (₹)") },
+                onValueChange = { taxText = filterAmountInput(it) },
+                label = { Text("Tax") },
+                leadingIcon = { Text("₹") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth()
             )
             Text(
                 "Split proportionally among everyone involved, based on what each person ordered.",
                 style = MaterialTheme.typography.bodySmall
             )
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Items ${formatRupees(itemsSubtotal)} + tax ${formatRupees(tax)}",
+                    style = MaterialTheme.typography.bodySmall)
+                Text(formatRupees(runningTotal), style = MaterialTheme.typography.titleSmall)
+            }
             Spacer(Modifier.height(12.dp))
 
             LazyColumn(modifier = Modifier.weight(1f)) {
@@ -101,6 +142,10 @@ fun ItemSplitScreen(
 
             Button(
                 onClick = {
+                    if (expenseName.isBlank()) {
+                        error = "Give this expense a name"
+                        return@Button
+                    }
                     if (items.isEmpty()) {
                         error = "Add at least one item"
                         return@Button
@@ -110,9 +155,17 @@ fun ItemSplitScreen(
                         error = "Every item needs at least one person"
                         return@Button
                     }
-                    val tax = taxText.toBigDecimalOrNull() ?: BigDecimal.ZERO
+                    if (runningTotal.signum() <= 0) {
+                        error = "The receipt total must be more than zero"
+                        return@Button
+                    }
+                    error = null
                     val results = SplitCalculator.itemized(receiptItems, tax)
-                    onConfirm(receiptItems, results.associate { it.userId to it.amount })
+                    onConfirm(
+                        expenseName.trim(),
+                        receiptItems,
+                        results.associate { it.userId to it.amount }
+                    )
                 },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             ) { Text("Confirm split") }
@@ -162,16 +215,28 @@ private fun EditItemDialog(
         title = { Text(if (initialName.isBlank()) "Add item" else "Edit item") },
         text = {
             Column {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Item name") })
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Item name") },
+                    singleLine = true
+                )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = priceText, onValueChange = { priceText = it }, label = { Text("Price (₹)") })
+                OutlinedTextField(
+                    value = priceText,
+                    onValueChange = { priceText = filterAmountInput(it) },
+                    label = { Text("Price") },
+                    leadingIcon = { Text("₹") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                val price = priceText.toBigDecimalOrNull()
-                if (name.isBlank() || price == null) {
+                val price = priceText.toAmountOrNull()
+                if (name.isBlank() || price == null || price.signum() < 0) {
                     error = "Enter a valid name and price"
                     return@TextButton
                 }

@@ -22,8 +22,9 @@ fun AddExpenseScreenHost(
 
     AddExpenseScreen(
         groupMembers = members,
-        onManualEntry = { amount, paidBy, participantIds ->
+        onManualEntry = { name, amount, paidBy, participantIds ->
             pendingExpenseViewModel.groupId = groupId
+            pendingExpenseViewModel.reason = name
             pendingExpenseViewModel.totalAmount = amount
             pendingExpenseViewModel.paidBy = paidBy
             pendingExpenseViewModel.participants = members.filter { participantIds.contains(it.first) }

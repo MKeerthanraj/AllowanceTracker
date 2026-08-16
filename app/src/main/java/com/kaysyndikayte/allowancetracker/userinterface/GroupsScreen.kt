@@ -5,7 +5,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -18,7 +17,7 @@ import androidx.compose.foundation.clickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GroupsScreen(onBack: () -> Unit, onOpenGroup: (String) -> Unit) {
+fun GroupsScreen(onOpenGroup: (String) -> Unit) {
     val groupRepository = remember { GroupRepository() }
     val scope = rememberCoroutineScope()
 
@@ -44,14 +43,10 @@ fun GroupsScreen(onBack: () -> Unit, onOpenGroup: (String) -> Unit) {
     LaunchedEffect(Unit) { refresh() }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Groups") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
-                }
-            )
-        },
+        // Bottom inset belongs to the tab bar hosting this screen.
+        contentWindowInsets = WindowInsets.safeDrawing
+            .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
+        topBar = { TopAppBar(title = { Text("Groups") }) },
         floatingActionButton = {
             var isFabExpanded by remember { mutableStateOf(false) }
             Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {

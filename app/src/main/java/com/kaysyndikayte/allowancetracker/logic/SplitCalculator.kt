@@ -10,7 +10,7 @@ object SplitCalculator {
     /** Equal split among selected participants. Remainder cents go to the first participant
      *  (deterministic, avoids floating point drift across many splits). */
     fun equal(total: BigDecimal, participantIds: List<String>): List<ParticipantAmount> {
-        require(participantIds.isNotEmpty())
+        require(participantIds.isNotEmpty()) { "Select at least one person to split between" }
         val base = total.divide(BigDecimal(participantIds.size), 2, RoundingMode.DOWN)
         val distributed = base.multiply(BigDecimal(participantIds.size))
         val remainder = total.subtract(distributed) // leftover paise/cents
@@ -33,7 +33,8 @@ object SplitCalculator {
     /** e.g. userA=2 shares, userB=1 share -> A pays 2/3, B pays 1/3 */
     fun byShares(shares: Map<String, Int>, total: BigDecimal): List<ParticipantAmount> {
         val totalShares = shares.values.sum()
-        require(totalShares > 0)
+        require(shares.values.none { it < 0 }) { "Shares cannot be negative" }
+        require(totalShares > 0) { "Total shares must be greater than zero" }
         val results = mutableListOf<ParticipantAmount>()
         var distributed = BigDecimal.ZERO
         val entries = shares.entries.toList()
@@ -84,18 +85,36 @@ object SplitCalculator {
         items: List<ReceiptItem>,
         taxAmount: BigDecimal
     ): List<ParticipantAmount> {
-        val perPersonSubtotal = mutableMapOf<String, BigDecimal>()
+        val penny = BigDecimal("0.01")
+        // LinkedHashMap: participant order has to be stable, or which person absorbs the tax
+        // remainder below would vary run to run for the very same receipt.
+        val perPersonSubtotal = LinkedHashMap<String, BigDecimal>()
 
         for (item in items) {
-            if (item.participantIds.isEmpty()) continue
-            val share = item.price.divide(BigDecimal(item.participantIds.size), 4, RoundingMode.HALF_UP)
-            for (uid in item.participantIds) {
+            val ids = item.participantIds.distinct()
+            if (ids.isEmpty()) continue
+            // Allocate each item exactly: a base share for everyone, then one paisa at a time
+            // to the first few sharers until the shares add up to the item price precisely.
+            // Rounding each person's accumulated subtotal at the end instead (the previous
+            // approach) loses or invents paise -- 10.00 across 3 people rounded to 3.33 each
+            // reconciles to 9.99, and across 6 people it reconciles to 10.02.
+            // FLOOR rather than DOWN so a negative line (a discount) stays exact too.
+            val price = item.price.setScale(2, RoundingMode.HALF_UP)
+            val base = price.divide(BigDecimal(ids.size), 2, RoundingMode.FLOOR)
+            val remainder = price.subtract(base.multiply(BigDecimal(ids.size)))
+            val extraPennies = remainder.divide(penny, 0, RoundingMode.HALF_UP).toInt()
+
+            ids.forEachIndexed { index, uid ->
+                val share = if (index < extraPennies) base.add(penny) else base
                 perPersonSubtotal[uid] = (perPersonSubtotal[uid] ?: BigDecimal.ZERO).add(share)
             }
         }
 
         val subtotalSum = perPersonSubtotal.values.fold(BigDecimal.ZERO) { acc, v -> acc.add(v) }
-        if (subtotalSum == BigDecimal.ZERO) return emptyList()
+        // signum, not ==: BigDecimal.equals compares scale as well as value, so a subtotal of
+        // 0.0000 was never equal to BigDecimal.ZERO and a receipt of entirely zero-priced
+        // items fell straight through this guard into a divide-by-zero below.
+        if (subtotalSum.signum() == 0) return emptyList()
 
         val results = mutableListOf<ParticipantAmount>()
         var distributedTax = BigDecimal.ZERO
@@ -108,7 +127,7 @@ object SplitCalculator {
                 taxAmount.multiply(subtotal).divide(subtotalSum, 2, RoundingMode.DOWN)
             }
             distributedTax = distributedTax.add(taxShare)
-            results.add(ParticipantAmount(uid, subtotal.setScale(2, RoundingMode.HALF_UP).add(taxShare)))
+            results.add(ParticipantAmount(uid, subtotal.add(taxShare)))
         }
         return results
     }
