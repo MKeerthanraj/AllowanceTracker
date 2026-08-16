@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -18,14 +18,16 @@ import java.util.Locale
 @Composable
 fun AnalyticsScreen(viewModel: AllowanceViewModel, onBack: () -> Unit) {
     val analytics by viewModel.analytics.collectAsState()
-    val money = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
+    val money = NumberFormat.getCurrencyInstance(
+        Locale.Builder().setLanguage("en").setRegion("IN").build()
+    )
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Analytics") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 }
             )
         }
@@ -35,21 +37,21 @@ fun AnalyticsScreen(viewModel: AllowanceViewModel, onBack: () -> Unit) {
                 Text("Total Spent: ${money.format(data.totalSpent)}", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
                 data.topCategory?.let {
-                    val cat = Category.valueOf(it.category)
+                    val cat = Category.fromName(it.category)
                     Text("Top category: ${cat.displayName} (${money.format(it.total)})")
                 }
                 Spacer(Modifier.height(16.dp))
                 Text("Breakdown by category", style = MaterialTheme.typography.titleSmall)
                 LazyColumn {
                     items(data.perCategory) { spend ->
-                        val cat = Category.valueOf(spend.category)
+                        val cat = Category.fromName(spend.category)
                         ListItem(
                             leadingContent = { Icon(cat.icon, contentDescription = null) },
                             headlineContent = { Text(cat.displayName) },
                             supportingContent = { Text("${"%.1f".format(spend.percent)}% of total") },
                             trailingContent = { Text(money.format(spend.total)) }
                         )
-                        Divider()
+                        HorizontalDivider()
                     }
                 }
             } ?: Text("No data for this range yet.")

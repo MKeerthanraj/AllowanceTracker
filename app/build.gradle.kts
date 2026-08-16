@@ -16,6 +16,8 @@ plugins {
 
 ksp {
     arg("room.generateKotlin", "true")
+    // Writes the schema JSON per version so migrations can be diffed and reviewed.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 android {

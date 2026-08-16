@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -22,7 +22,9 @@ import java.util.Locale
 @Composable
 fun HistoryScreen(viewModel: AllowanceViewModel, onBack: () -> Unit, onSelectRange: () -> Unit) {
     val ranges by viewModel.allDateRanges.collectAsState()
-    val money = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
+    val money = NumberFormat.getCurrencyInstance(
+        Locale.Builder().setLanguage("en").setRegion("IN").build()
+    )
 
     var rangeToDelete by remember { mutableStateOf<DateRangeEntity?>(null) }
 
@@ -31,7 +33,7 @@ fun HistoryScreen(viewModel: AllowanceViewModel, onBack: () -> Unit, onSelectRan
             TopAppBar(
                 title = { Text("All Date Ranges") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 }
             )
         }
@@ -58,7 +60,7 @@ fun HistoryScreen(viewModel: AllowanceViewModel, onBack: () -> Unit, onSelectRan
                         onLongClick = { rangeToDelete = range }
                     )
                 )
-                Divider()
+                HorizontalDivider()
             }
         }
     }

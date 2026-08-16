@@ -17,6 +17,7 @@ fun SplitConfigScreenHost(
 
     SplitConfigScreen(
         totalAmount = pendingExpenseViewModel.totalAmount,
+        expenseName = pendingExpenseViewModel.reason,
         participants = pendingExpenseViewModel.participants,
         onConfirm = { splitType, amounts ->
             scope.launch {

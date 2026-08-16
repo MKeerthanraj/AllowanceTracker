@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Database dumps -- these hold real spending data and must never be committed.
+*.db
+*.db-shm
+*.db-wal

@@ -7,19 +7,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kaysyndikayte.allowancetracker.data.Category
 import com.kaysyndikayte.allowancetracker.utils.DateUtils
 import com.kaysyndikayte.allowancetracker.viewmodel.AllowanceViewModel
-import java.text.NumberFormat
-import java.util.Locale
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
 import com.kaysyndikayte.allowancetracker.utils.ReceiptParser
@@ -30,9 +28,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.background
 
-private fun money(v: Double): String =
-    NumberFormat.getCurrencyInstance(Locale.Builder().setLanguage("en").setRegion("IN").build()).format(v)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -40,8 +35,7 @@ fun HomeScreen(
     sharedImageUri: Uri?,
     onImageConsumed: () -> Unit,
     onOpenAnalytics: () -> Unit,
-    onOpenHistory: () -> Unit,
-    onOpenGroups: () -> Unit
+    onOpenHistory: () -> Unit
 ) {
     val range by viewModel.selectedRange.collectAsState()
     val summary by viewModel.summary.collectAsState()
@@ -61,7 +55,7 @@ fun HomeScreen(
             when (event) {
                 is AllowanceViewModel.AllowanceEvent.DuplicateTransaction -> {
                     snackbarHostState.showSnackbar(
-                        message = "Duplicate transaction detected: ${event.reason} (${money(event.amount)})",
+                        message = "Duplicate transaction detected: ${event.reason} (${formatRupees(event.amount)})",
                         duration = SnackbarDuration.Short
                     )
                 }
@@ -84,32 +78,32 @@ fun HomeScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        // The tab bar below already owns the bottom inset; taking it again here would leave
+        // a dead strip above it.
+        contentWindowInsets = WindowInsets.safeDrawing
+            .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
         topBar = {
             TopAppBar(
                 title = {
+                    // The remaining figure used to sit in a SpaceBetween Row here. With four
+                    // action icons the title had so little width left that it wrapped to one
+                    // character per line; it lives in the summary card below now.
                     Column {
                         Text(
                             text = range?.name ?: "No range set",
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = range?.let { DateUtils.formatRange(it.startEpochDay, it.endEpochDay) } ?: "-",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                text = summary?.let { money(it.remaining) } ?: "-",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Text(
+                            text = range?.let { DateUtils.formatRange(it.startEpochDay, it.endEpochDay) } ?: "-",
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 },
                 actions = {
-                    IconButton(onClick = onOpenGroups) { Icon(Icons.Filled.Groups, contentDescription = "Groups") }
                     IconButton(onClick = onOpenHistory) { Icon(Icons.Filled.History, contentDescription = "History") }
                     IconButton(onClick = onOpenAnalytics) { Icon(Icons.Filled.BarChart, contentDescription = "Analytics") }
                     IconButton(onClick = { showNewRangeDialog = true }) { Icon(Icons.Filled.Add, contentDescription = "New Range") }
@@ -127,7 +121,7 @@ fun HomeScreen(
 
             val earned = summary?.earnedOrDebt ?: 0.0
             Text(
-                text = money(earned),
+                text = formatRupees(earned),
                 style = MaterialTheme.typography.displaySmall,
                 color = if (earned >= 0) Color(0xFF2E7D32) else Color(0xFFC62828),
                 fontWeight = FontWeight.Bold
@@ -158,9 +152,20 @@ fun HomeScreen(
 
             Spacer(Modifier.height(16.dp))
             summary?.let {
-                Text("Per day allowance: ${money(it.perDayAllowance)}", style = MaterialTheme.typography.bodySmall)
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        SummaryRow("Remaining this period", formatRupees(it.remaining), bold = true)
+                        SummaryRow("Spent so far", formatRupees(it.totalSpent))
+                        SummaryRow("Per day allowance", formatRupees(it.perDayAllowance))
+                    }
+                }
                 if (it.isEnded) {
-                    Text("This period has ended", color = Color.Red, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "This period has ended",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
@@ -188,9 +193,11 @@ fun HomeScreen(
             Text("Transaction History", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
 
-            LazyColumn(modifier = Modifier.fillMaxWidth()) {
+            // weight so the list takes the leftover height instead of being squeezed out
+            // by everything above it on a short screen.
+            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 items(transactions, key = { it.id }) { tx ->
-                    val cat = Category.valueOf(tx.category)
+                    val cat = Category.fromName(tx.category)
                     val dateTimeStr = remember(tx.timestampMillis) {
                         java.time.Instant.ofEpochMilli(tx.timestampMillis)
                             .atZone(java.time.ZoneId.systemDefault())
@@ -237,7 +244,7 @@ fun HomeScreen(
                                     headlineContent = { Text(tx.reason) },
                                     supportingContent = { Text("${cat.displayName} • $dateTimeStr") },
                                     leadingContent = { Icon(cat.icon, contentDescription = null) },
-                                    trailingContent = { Text(money(tx.amount)) }
+                                    trailingContent = { Text(formatRupees(tx.amount)) }
                                 )
                                 HorizontalDivider()
                             }
@@ -278,6 +285,21 @@ fun HomeScreen(
                 prefillAmount = ""
                 prefillTimestamp = null
             }
+        )
+    }
+}
+
+@Composable
+private fun SummaryRow(label: String, value: String, bold: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal
         )
     }
 }
