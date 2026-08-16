@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.kaysyndikayte.allowancetracker.data.GroupSummary
 import com.kaysyndikayte.allowancetracker.repository.GroupRepository
@@ -52,16 +53,47 @@ fun GroupsScreen(onBack: () -> Unit, onOpenGroup: (String) -> Unit) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Create group")
+            var isFabExpanded by remember { mutableStateOf(false) }
+            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                if (isFabExpanded) {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            showJoinDialog = true
+                            isFabExpanded = false
+                        },
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Row(modifier = Modifier.padding(horizontal = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Add, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Join Group")
+                        }
+                    }
+                    SmallFloatingActionButton(
+                        onClick = {
+                            showCreateDialog = true
+                            isFabExpanded = false
+                        },
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Row(modifier = Modifier.padding(horizontal = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Add, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Create Group")
+                        }
+                    }
+                }
+                FloatingActionButton(onClick = { isFabExpanded = !isFabExpanded }) {
+                    Icon(
+                        if (isFabExpanded) Icons.Filled.Add else Icons.Filled.Add, 
+                        contentDescription = "Menu",
+                        modifier = Modifier.let { if (isFabExpanded) it.graphicsLayer(rotationZ = 45f) else it }
+                    )
+                }
             }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            TextButton(onClick = { showJoinDialog = true }, modifier = Modifier.padding(16.dp)) {
-                Text("Have an invite code? Join a group")
-            }
-
             if (isLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                     CircularProgressIndicator()
