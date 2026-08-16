@@ -2,16 +2,22 @@
   "formatVersion": 1,
   "database": {
     "version": 5,
-    "identityHash": "71ef29e496d7869aff96c0f64deff8ff",
+    "identityHash": "c1ee73a585ee2dede3dcb642f6ec20ec",
     "entities": [
       {
         "tableName": "date_ranges",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `startEpochDay` INTEGER NOT NULL, `endEpochDay` INTEGER NOT NULL, `allowanceAmount` REAL NOT NULL, `isForceEnded` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `name` TEXT NOT NULL, `start_epoch_day` INTEGER NOT NULL, `end_epoch_day` INTEGER NOT NULL, `allowance_amount` REAL NOT NULL, `is_force_ended` INTEGER NOT NULL, `created_at` TEXT, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "user_id",
+            "columnName": "user_id",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -21,38 +27,37 @@
             "notNull": true
           },
           {
-            "fieldPath": "startEpochDay",
-            "columnName": "startEpochDay",
+            "fieldPath": "start_epoch_day",
+            "columnName": "start_epoch_day",
             "affinity": "INTEGER",
             "notNull": true
           },
           {
-            "fieldPath": "endEpochDay",
-            "columnName": "endEpochDay",
+            "fieldPath": "end_epoch_day",
+            "columnName": "end_epoch_day",
             "affinity": "INTEGER",
             "notNull": true
           },
           {
-            "fieldPath": "allowanceAmount",
-            "columnName": "allowanceAmount",
+            "fieldPath": "allowance_amount",
+            "columnName": "allowance_amount",
             "affinity": "REAL",
             "notNull": true
           },
           {
-            "fieldPath": "isForceEnded",
-            "columnName": "isForceEnded",
+            "fieldPath": "is_force_ended",
+            "columnName": "is_force_ended",
             "affinity": "INTEGER",
             "notNull": true
           },
           {
-            "fieldPath": "createdAt",
-            "columnName": "createdAt",
-            "affinity": "INTEGER",
-            "notNull": true
+            "fieldPath": "created_at",
+            "columnName": "created_at",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
-          "autoGenerate": true,
+          "autoGenerate": false,
           "columnNames": [
             "id"
           ]
@@ -60,29 +65,35 @@
       },
       {
         "tableName": "transactions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `dateRangeId` INTEGER NOT NULL, `dateEpochDay` INTEGER NOT NULL, `timestampMillis` INTEGER NOT NULL, `reason` TEXT NOT NULL, `category` TEXT NOT NULL, `amount` REAL NOT NULL, FOREIGN KEY(`dateRangeId`) REFERENCES `date_ranges`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `date_range_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `date_epoch_day` INTEGER NOT NULL, `timestamp_millis` INTEGER NOT NULL, `reason` TEXT NOT NULL, `category` TEXT NOT NULL, `amount` REAL NOT NULL, `is_from_group_split` INTEGER NOT NULL, `source_expense_id` TEXT, `created_at` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`date_range_id`) REFERENCES `date_ranges`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date_range_id",
+            "columnName": "date_range_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "user_id",
+            "columnName": "user_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date_epoch_day",
+            "columnName": "date_epoch_day",
             "affinity": "INTEGER",
             "notNull": true
           },
           {
-            "fieldPath": "dateRangeId",
-            "columnName": "dateRangeId",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "dateEpochDay",
-            "columnName": "dateEpochDay",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "timestampMillis",
-            "columnName": "timestampMillis",
+            "fieldPath": "timestamp_millis",
+            "columnName": "timestamp_millis",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -103,23 +114,39 @@
             "columnName": "amount",
             "affinity": "REAL",
             "notNull": true
+          },
+          {
+            "fieldPath": "is_from_group_split",
+            "columnName": "is_from_group_split",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source_expense_id",
+            "columnName": "source_expense_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "created_at",
+            "columnName": "created_at",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
-          "autoGenerate": true,
+          "autoGenerate": false,
           "columnNames": [
             "id"
           ]
         },
         "indices": [
           {
-            "name": "index_transactions_dateRangeId",
+            "name": "index_transactions_date_range_id",
             "unique": false,
             "columnNames": [
-              "dateRangeId"
+              "date_range_id"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_dateRangeId` ON `${TABLE_NAME}` (`dateRangeId`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_date_range_id` ON `${TABLE_NAME}` (`date_range_id`)"
           }
         ],
         "foreignKeys": [
@@ -128,7 +155,7 @@
             "onDelete": "CASCADE",
             "onUpdate": "NO ACTION",
             "columns": [
-              "dateRangeId"
+              "date_range_id"
             ],
             "referencedColumns": [
               "id"
@@ -139,7 +166,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '71ef29e496d7869aff96c0f64deff8ff')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c1ee73a585ee2dede3dcb642f6ec20ec')"
     ]
   }
 }

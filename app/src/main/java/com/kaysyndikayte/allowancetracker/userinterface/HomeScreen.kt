@@ -16,6 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kaysyndikayte.allowancetracker.data.Category
+import com.kaysyndikayte.allowancetracker.data.DateRangeDto
+import com.kaysyndikayte.allowancetracker.data.PersonalTransactionDto
 import com.kaysyndikayte.allowancetracker.utils.DateUtils
 import com.kaysyndikayte.allowancetracker.viewmodel.AllowanceViewModel
 import android.net.Uri
@@ -96,7 +98,7 @@ fun HomeScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = range?.let { DateUtils.formatRange(it.startEpochDay, it.endEpochDay) } ?: "-",
+                            text = range?.let { DateUtils.formatRange(it.start_epoch_day, it.end_epoch_day) } ?: "-",
                             style = MaterialTheme.typography.bodySmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -198,8 +200,8 @@ fun HomeScreen(
             LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 items(transactions, key = { it.id }) { tx ->
                     val cat = Category.fromName(tx.category)
-                    val dateTimeStr = remember(tx.timestampMillis) {
-                        java.time.Instant.ofEpochMilli(tx.timestampMillis)
+                    val dateTimeStr = remember(tx.timestamp_millis) {
+                        java.time.Instant.ofEpochMilli(tx.timestamp_millis)
                             .atZone(java.time.ZoneId.systemDefault())
                             .format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a"))
                     }

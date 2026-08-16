@@ -8,7 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [DateRangeEntity::class, TransactionEntity::class],
+    entities = [DateRangeDto::class, PersonalTransactionDto::class],
     version = 5
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -19,16 +19,13 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile private var INSTANCE: AppDatabase? = null
 
         /**
-         * v5 adds the index on transactions.dateRangeId. Written out by hand rather than left
-         * to fallbackToDestructiveMigration, which would delete every period and transaction
-         * already recorded on the device. The index name must match what Room generates for
-         * @Index("dateRangeId") or the post-migration schema validation fails.
+         * v5 adds the index on transactions.date_range_id.
          */
         private val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_transactions_dateRangeId` " +
-                        "ON `transactions` (`dateRangeId`)"
+                    "CREATE INDEX IF NOT EXISTS `index_transactions_date_range_id` " +
+                        "ON `transactions` (`date_range_id`)"
                 )
             }
         }

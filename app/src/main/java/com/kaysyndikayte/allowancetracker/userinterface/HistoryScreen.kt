@@ -11,7 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.kaysyndikayte.allowancetracker.data.DateRangeEntity
+import com.kaysyndikayte.allowancetracker.data.DateRangeDto
 import com.kaysyndikayte.allowancetracker.ui.LiveIndicatorDot
 import com.kaysyndikayte.allowancetracker.utils.DateUtils
 import com.kaysyndikayte.allowancetracker.viewmodel.AllowanceViewModel
@@ -26,7 +26,7 @@ fun HistoryScreen(viewModel: AllowanceViewModel, onBack: () -> Unit, onSelectRan
         Locale.Builder().setLanguage("en").setRegion("IN").build()
     )
 
-    var rangeToDelete by remember { mutableStateOf<DateRangeEntity?>(null) }
+    var rangeToDelete by remember { mutableStateOf<DateRangeDto?>(null) }
 
     Scaffold(
         topBar = {
@@ -40,18 +40,18 @@ fun HistoryScreen(viewModel: AllowanceViewModel, onBack: () -> Unit, onSelectRan
     ) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
             items(ranges, key = { it.id }) { range ->
-                val isLive = DateUtils.isLive(range.startEpochDay, range.endEpochDay)
+                val isLive = DateUtils.isLive(range.start_epoch_day, range.end_epoch_day)
                 ListItem(
                     headlineContent = {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Text(DateUtils.formatRange(range.startEpochDay, range.endEpochDay))
+                            Text(DateUtils.formatRange(range.start_epoch_day, range.end_epoch_day))
                             if (isLive) {
                                 Spacer(Modifier.width(8.dp))
                                 LiveIndicatorDot()
                             }
                         }
                     },
-                    supportingContent = { Text("Allowance: ${money.format(range.allowanceAmount)}") },
+                    supportingContent = { Text("Allowance: ${money.format(range.allowance_amount)}") },
                     modifier = Modifier.combinedClickable(
                         onClick = {
                             viewModel.selectRange(range.id)
@@ -66,7 +66,7 @@ fun HistoryScreen(viewModel: AllowanceViewModel, onBack: () -> Unit, onSelectRan
     }
 
     rangeToDelete?.let { range ->
-        val isLive = DateUtils.isLive(range.startEpochDay, range.endEpochDay)
+        val isLive = DateUtils.isLive(range.start_epoch_day, range.end_epoch_day)
         AlertDialog(
             onDismissRequest = { rangeToDelete = null },
             title = { Text(if (isLive) "End this active period?" else "Delete this period?") },
@@ -75,7 +75,7 @@ fun HistoryScreen(viewModel: AllowanceViewModel, onBack: () -> Unit, onSelectRan
                     if (isLive) {
                         "This allowance period is currently live. Are you sure you want to end it and delete it? All its transactions will be removed too."
                     } else {
-                        "Are you sure you want to delete this period (${DateUtils.formatRange(range.startEpochDay, range.endEpochDay)})? All its transactions will be removed too."
+                        "Are you sure you want to delete this period (${DateUtils.formatRange(range.start_epoch_day, range.end_epoch_day)})? All its transactions will be removed too."
                     }
                 )
             },

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -80,7 +81,7 @@ fun GroupsScreen(onOpenGroup: (String) -> Unit) {
                         modifier = Modifier.padding(bottom = 8.dp)
                     ) {
                         Row(modifier = Modifier.padding(horizontal = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Add, contentDescription = null)
+                            Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Join Group")
                         }

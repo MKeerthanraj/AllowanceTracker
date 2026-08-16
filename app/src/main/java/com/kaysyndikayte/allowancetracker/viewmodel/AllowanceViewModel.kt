@@ -2,8 +2,8 @@ package com.kaysyndikayte.allowancetracker.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kaysyndikayte.allowancetracker.data.DateRangeEntity
-import com.kaysyndikayte.allowancetracker.data.TransactionEntity
+import com.kaysyndikayte.allowancetracker.data.DateRangeDto
+import com.kaysyndikayte.allowancetracker.data.PersonalTransactionDto
 import com.kaysyndikayte.allowancetracker.repository.AllowanceRepository
 import com.kaysyndikayte.allowancetracker.utils.DateUtils
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,9 +20,10 @@ data class RangeAnalytics(
 
 class AllowanceViewModel(private val repository: AllowanceRepository) : ViewModel() {
 
-    private val _selectedRangeId = MutableStateFlow<Long?>(null)
+    // Long -> String: Supabase ids are uuid text, not Room autoincrement longs.
+    private val _selectedRangeId = MutableStateFlow<String?>(null)
 
-    val allDateRanges: StateFlow<List<DateRangeEntity>> = repository.getAllDateRanges()
+    val allDateRanges: StateFlow<List<DateRangeDto>> = repository.getAllDateRanges()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Auto-select the most recent range once ranges load, if nothing selected yet
@@ -36,15 +37,15 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
         }
     }
 
-    fun selectRange(id: Long) { _selectedRangeId.value = id }
+    fun selectRange(id: String) { _selectedRangeId.value = id }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val selectedRange: StateFlow<DateRangeEntity?> = _selectedRangeId
+    val selectedRange: StateFlow<DateRangeDto?> = _selectedRangeId
         .flatMapLatest { id -> if (id == null) flowOf(null) else repository.getDateRange(id) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val transactionsForSelectedRange: StateFlow<List<TransactionEntity>> = _selectedRangeId
+    val transactionsForSelectedRange: StateFlow<List<PersonalTransactionDto>> = _selectedRangeId
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repository.getTransactions(id) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -62,12 +63,12 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
         selectedRange, transactionsForSelectedRange
     ) { range, transactions ->
         if (range == null) return@combine null
-        val totalDays = DateUtils.totalDays(range.startEpochDay, range.endEpochDay)
-        val perDay = if (totalDays > 0) range.allowanceAmount / totalDays else 0.0
-        val elapsed = DateUtils.daysElapsed(range.startEpochDay, range.endEpochDay)
+        val totalDays = DateUtils.totalDays(range.start_epoch_day, range.end_epoch_day)
+        val perDay = if (totalDays > 0) range.allowance_amount / totalDays else 0.0
+        val elapsed = DateUtils.daysElapsed(range.start_epoch_day, range.end_epoch_day)
         val totalSpent = transactions.sumOf { it.amount }
         val earned = (perDay * elapsed) - totalSpent
-        val remaining = range.allowanceAmount - totalSpent
+        val remaining = range.allowance_amount - totalSpent
 
         val daysToClear: Int? = if (earned < 0 && perDay > 0) {
             val daysNeeded = kotlin.math.ceil(kotlin.math.abs(earned) / perDay).toInt()
@@ -75,10 +76,10 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
             if (daysNeeded <= daysLeftInPeriod) daysNeeded else null // can't clear before period ends
         } else null
 
-        val isEnded = range.isForceEnded || java.time.LocalDate.now().toEpochDay() > range.endEpochDay
+        val isEnded = range.is_force_ended || java.time.LocalDate.now().toEpochDay() > range.end_epoch_day
 
         AllowanceSummary(perDay, earned, remaining, totalSpent, daysToClear, isEnded)
-    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val analytics: StateFlow<RangeAnalytics?> = transactionsForSelectedRange.map { transactions ->
         if (transactions.isEmpty()) return@map RangeAnalytics(0.0, emptyList(), null)
@@ -91,7 +92,7 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
             .toList()
             .sortedByDescending { it.total }
         RangeAnalytics(total, grouped, grouped.firstOrNull())
-    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, null)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _eventFlow = MutableSharedFlow<AllowanceEvent>()
     val eventFlow = _eventFlow.asSharedFlow()
@@ -103,12 +104,10 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
     fun addDateRange(name: String, startEpochDay: Long, endEpochDay: Long, amount: Double) {
         viewModelScope.launch {
             val newId = repository.addDateRange(
-                DateRangeEntity(
-                    name = name,
-                    startEpochDay = startEpochDay,
-                    endEpochDay = endEpochDay,
-                    allowanceAmount = amount
-                )
+                name = name,
+                startEpochDay = startEpochDay,
+                endEpochDay = endEpochDay,
+                allowanceAmount = amount
             )
             _selectedRangeId.value = newId
         }
@@ -117,7 +116,7 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
     fun forceEndCurrentRange() {
         val range = selectedRange.value ?: return
         viewModelScope.launch {
-            repository.updateDateRange(range.copy(isForceEnded = true))
+            repository.updateDateRange(range.copy(is_force_ended = true))
         }
     }
 
@@ -129,26 +128,24 @@ class AllowanceViewModel(private val repository: AllowanceRepository) : ViewMode
                 return@launch
             }
             repository.addTransaction(
-                TransactionEntity(
-                    dateRangeId = rangeId,
-                    dateEpochDay = java.time.Instant.ofEpochMilli(timestampMillis)
-                        .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay(),
-                    timestampMillis = timestampMillis,
-                    reason = reason,
-                    category = category,
-                    amount = amount
-                )
+                dateRangeId = rangeId,
+                dateEpochDay = java.time.Instant.ofEpochMilli(timestampMillis)
+                    .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay(),
+                timestampMillis = timestampMillis,
+                reason = reason,
+                category = category,
+                amount = amount
             )
         }
     }
 
-    fun deleteTransaction(transaction: TransactionEntity) {
+    fun deleteTransaction(transaction: PersonalTransactionDto) {
         viewModelScope.launch {
             repository.deleteTransaction(transaction)
         }
     }
 
-    fun deleteDateRange(range: DateRangeEntity) {
+    fun deleteDateRange(range: DateRangeDto) {
         viewModelScope.launch {
             repository.deleteDateRange(range)
             // If the deleted range was selected, clear selection so the app picks a new one

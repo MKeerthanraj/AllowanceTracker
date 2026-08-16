@@ -5,15 +5,18 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TransactionDao {
-    @Insert
-    suspend fun insert(transaction: TransactionEntity)
+    @Upsert
+    suspend fun insert(transaction: PersonalTransactionDto)
 
-    @Query("SELECT * FROM transactions WHERE dateRangeId = :rangeId ORDER BY timestampMillis DESC")
-    fun getForRange(rangeId: Long): Flow<List<TransactionEntity>>
+    @Query("SELECT * FROM transactions WHERE date_range_id = :rangeId ORDER BY timestamp_millis DESC")
+    fun getForRange(rangeId: String): Flow<List<PersonalTransactionDto>>
 
-    @Query("SELECT EXISTS(SELECT 1 FROM transactions WHERE timestampMillis = :timestamp)")
+    @Query("SELECT EXISTS(SELECT 1 FROM transactions WHERE timestamp_millis = :timestamp)")
     suspend fun existsWithTimestamp(timestamp: Long): Boolean
 
+    @Update
+    suspend fun update(transaction: PersonalTransactionDto)
+
     @Delete
-    suspend fun delete(transaction: TransactionEntity)
+    suspend fun delete(transaction: PersonalTransactionDto)
 }

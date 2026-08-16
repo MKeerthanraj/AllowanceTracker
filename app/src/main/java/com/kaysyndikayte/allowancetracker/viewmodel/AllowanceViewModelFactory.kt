@@ -1,15 +1,20 @@
 package com.kaysyndikayte.allowancetracker.viewmodel
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.kaysyndikayte.allowancetracker.data.AppDatabase
 import com.kaysyndikayte.allowancetracker.repository.AllowanceRepository
 
-class AllowanceViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+/**
+ * No longer needs a Context: Room's AppDatabase.getInstance(context) is gone, and
+ * SupabaseClientProvider is a plain object singleton, same as AuthRepository's pattern.
+ *
+ * MainActivity.kt currently does:
+ *   AllowanceViewModelFactory(androidx.compose.ui.platform.LocalContext.current)
+ * That call site needs to drop the argument: AllowanceViewModelFactory()
+ */
+class AllowanceViewModelFactory : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        val db = AppDatabase.getInstance(context)
-        val repository = AllowanceRepository(db.dateRangeDao(), db.transactionDao())
+        val repository = AllowanceRepository()
         @Suppress("UNCHECKED_CAST")
         return AllowanceViewModel(repository) as T
     }

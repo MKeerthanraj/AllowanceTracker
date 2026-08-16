@@ -66,7 +66,7 @@ fun AllowanceTrackerApp(sharedImageUri: Uri?, onImageConsumed: () -> Unit) {
             when (val status = sessionStatus) {
                 is SessionStatus.Authenticated -> {
                     val viewModel = viewModel<com.kaysyndikayte.allowancetracker.viewmodel.AllowanceViewModel>(
-                        factory = AllowanceViewModelFactory(androidx.compose.ui.platform.LocalContext.current)
+                        factory = AllowanceViewModelFactory()
                     )
                     AppNavHost(viewModel = viewModel, sharedImageUri = sharedImageUri, onImageConsumed = onImageConsumed)
                 }
