@@ -1,58 +1,116 @@
 package com.kaysyndikayte.allowancetracker.ui.theme
 
 import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+/**
+ * SYSTEM = follow the phone's setting (the default, until the user overrides it once).
+ * LIGHT / DARK = explicit user choice, persisted permanently via ThemePreferences/DataStore.
+ */
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+/**
+ * The thing every screen's top bar reads to show the toggle icon and flip the mode. Exposed
+ * through a CompositionLocal (see LocalThemeController below) so individual screens don't
+ * need a new parameter threaded through their function signatures — they just read
+ * LocalThemeController.current from inside the composable body.
+ */
+interface ThemeController {
+    val mode: ThemeMode
+    val isDark: Boolean
+    fun toggle()
+}
+
+val LocalThemeController = compositionLocalOf<ThemeController> {
+    error("No ThemeController provided — AllowanceTrackerTheme must wrap the app content")
+}
+
+private val LightColors = lightColorScheme(
+    primary = LightPrimary,
+    onPrimary = LightOnPrimary,
+    primaryContainer = LightPrimaryContainer,
+    onPrimaryContainer = LightOnPrimaryContainer,
+    secondary = LightSecondary,
+    background = LightBackground,
+    surface = LightSurface,
+    surfaceVariant = LightSurfaceVariant,
+    onSurface = LightOnSurface,
+    error = LightError,
+    onError = LightOnError,
+    errorContainer = LightErrorContainer
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+private val DarkColors = darkColorScheme(
+    primary = DarkPrimary,
+    onPrimary = DarkOnPrimary,
+    primaryContainer = DarkPrimaryContainer,
+    onPrimaryContainer = DarkOnPrimaryContainer,
+    secondary = DarkSecondary,
+    background = DarkBackground,
+    surface = DarkSurface,
+    surfaceVariant = DarkSurfaceVariant,
+    onSurface = DarkOnSurface,
+    error = DarkError,
+    onError = DarkOnError,
+    errorContainer = DarkErrorContainer
 )
 
+/**
+ * Wrap the whole app in this once, in MainActivity. It:
+ *  1. Resolves ThemeMode -> an actual light/dark boolean (SYSTEM defers to isSystemInDarkTheme()).
+ *  2. Applies the matching MaterialTheme color scheme.
+ *  3. Provides ThemeController down through LocalThemeController so every screen's top bar
+ *     can show a toggle button without new parameters.
+ *  4. Keeps the status bar / nav bar icon color in sync (dark icons on light bg, vice versa) —
+ *     this replaces any separate status-bar-icon fix from before; that logic now lives here
+ *     and reacts automatically whenever the theme changes.
+ */
 @Composable
 fun AllowanceTrackerTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    themeMode: ThemeMode,
+    onToggle: (currentlyDark: Boolean) -> Unit,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+    val systemDark = isSystemInDarkTheme()
+    val darkTheme = when (themeMode) {
+        ThemeMode.SYSTEM -> systemDark
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    val controller = remember(themeMode, darkTheme, onToggle) {
+        object : ThemeController {
+            override val mode = themeMode
+            override val isDark = darkTheme
+            override fun toggle() = onToggle(darkTheme)
+        }
+    }
+
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
+    }
+
+    CompositionLocalProvider(LocalThemeController provides controller) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            content = content
+        )
+    }
 }

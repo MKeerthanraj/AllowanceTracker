@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.kaysyndikayte.allowancetracker.logic.SplitCalculator
+import com.kaysyndikayte.allowancetracker.ui.theme.ThemeToggleAction
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -74,7 +75,8 @@ fun SplitConfigScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                actions = { ThemeToggleAction() }
             )
         }
     ) { padding ->

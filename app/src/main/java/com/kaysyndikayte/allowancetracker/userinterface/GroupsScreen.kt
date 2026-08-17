@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import com.kaysyndikayte.allowancetracker.ui.theme.ThemeToggleAction
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,16 +36,16 @@ fun GroupsScreen(onOpenGroup: (String) -> Unit) {
     var showJoinDialog by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    
+
     var showIconPickerForGroup by remember { mutableStateOf<GroupSummary?>(null) }
 
     val rawIcons = remember {
         listOf(
-            "dog", "gym", "sun", "cake", "fish", "girl", "home", "crown", "globe", "happy", 
-            "heart", "music", "pulse", "skull", "staff", "batman", "poison", "discord", 
-            "airplane", "dinosaur", "football", "hospital", "location", "valorant", 
-            "butterfly", "pixel_heart", "super_mario", "love_circled", "organization", 
-            "lightning_bolt", "game_controller", "minecraft_sword", "obscene_gesture", 
+            "dog", "gym", "sun", "cake", "fish", "girl", "home", "crown", "globe", "happy",
+            "heart", "music", "pulse", "skull", "staff", "batman", "poison", "discord",
+            "airplane", "dinosaur", "football", "hospital", "location", "valorant",
+            "butterfly", "pixel_heart", "super_mario", "love_circled", "organization",
+            "lightning_bolt", "game_controller", "minecraft_sword", "obscene_gesture",
             "valentine_wings", "minecraft_creeper", "minecraft_pickaxe"
         )
     }
@@ -68,7 +69,12 @@ fun GroupsScreen(onOpenGroup: (String) -> Unit) {
         // Bottom inset belongs to the tab bar hosting this screen.
         contentWindowInsets = WindowInsets.safeDrawing
             .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal),
-        topBar = { TopAppBar(title = { Text("Groups") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Groups") },
+                actions = { ThemeToggleAction() }
+            )
+        },
         floatingActionButton = {
             var isFabExpanded by remember { mutableStateOf(false) }
             Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
@@ -102,7 +108,7 @@ fun GroupsScreen(onOpenGroup: (String) -> Unit) {
                 }
                 FloatingActionButton(onClick = { isFabExpanded = !isFabExpanded }) {
                     Icon(
-                        if (isFabExpanded) Icons.Filled.Add else Icons.Filled.Add, 
+                        if (isFabExpanded) Icons.Filled.Add else Icons.Filled.Add,
                         contentDescription = "Menu",
                         modifier = Modifier.let { if (isFabExpanded) it.graphicsLayer(rotationZ = 45f) else it }
                     )
@@ -229,8 +235,8 @@ fun GroupsScreen(onOpenGroup: (String) -> Unit) {
             text = {
                 Column {
                     OutlinedTextField(
-                        value = name, 
-                        onValueChange = { name = it }, 
+                        value = name,
+                        onValueChange = { name = it },
                         label = { Text("Group name") },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -244,7 +250,7 @@ fun GroupsScreen(onOpenGroup: (String) -> Unit) {
                         val iconRes = if (selectedIcon != null) {
                             context.resources.getIdentifier(selectedIcon, "raw", context.packageName)
                         } else 0
-                        
+
                         if (iconRes != 0) {
                             Image(
                                 painter = painterResource(iconRes),

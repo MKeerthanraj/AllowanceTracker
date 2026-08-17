@@ -9,6 +9,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.kaysyndikayte.allowancetracker.repository.AuthRepository
+import com.kaysyndikayte.allowancetracker.ui.theme.ThemeToggleAction
 import kotlinx.coroutines.launch
 
 @Composable
@@ -20,56 +21,62 @@ fun AuthScreen(authRepository: AuthRepository, onAuthSuccess: () -> Unit) {
     var errorMsg by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(if (isSignUp) "Create account" else "Log in", style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(16.dp))
-
-        if (isSignUp) {
-            OutlinedTextField(value = displayName, onValueChange = { displayName = it }, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            ThemeToggleAction()
         }
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password") },
-            singleLine = true,
-            // Was rendering the password as clear text on screen for anyone stood nearby.
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(16.dp))
 
-        errorMsg?.let { Text(it, color = MaterialTheme.colorScheme.error); Spacer(Modifier.height(8.dp)) }
+        Column(
+            modifier = Modifier.weight(1f).padding(24.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(if (isSignUp) "Create account" else "Log in", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(16.dp))
 
-        Button(onClick = {
-            scope.launch {
-                try {
-                    if (isSignUp) authRepository.signUp(email, password, displayName)
-                    else authRepository.signIn(email, password)
-                    onAuthSuccess()
-                } catch (e: Exception) {
-                    errorMsg = e.message
-                }
+            if (isSignUp) {
+                OutlinedTextField(value = displayName, onValueChange = { displayName = it }, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
             }
-        }, modifier = Modifier.fillMaxWidth()) {
-            Text(if (isSignUp) "Sign up" else "Log in")
-        }
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                singleLine = true,
+                // Was rendering the password as clear text on screen for anyone stood nearby.
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(16.dp))
 
-        TextButton(onClick = { isSignUp = !isSignUp }) {
-            Text(if (isSignUp) "Already have an account? Log in" else "New here? Sign up")
+            errorMsg?.let { Text(it, color = MaterialTheme.colorScheme.error); Spacer(Modifier.height(8.dp)) }
+
+            Button(onClick = {
+                scope.launch {
+                    try {
+                        if (isSignUp) authRepository.signUp(email, password, displayName)
+                        else authRepository.signIn(email, password)
+                        onAuthSuccess()
+                    } catch (e: Exception) {
+                        errorMsg = e.message
+                    }
+                }
+            }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (isSignUp) "Sign up" else "Log in")
+            }
+
+            TextButton(onClick = { isSignUp = !isSignUp }) {
+                Text(if (isSignUp) "Already have an account? Log in" else "New here? Sign up")
+            }
         }
     }
 }

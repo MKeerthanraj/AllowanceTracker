@@ -15,6 +15,7 @@ import com.kaysyndikayte.allowancetracker.data.DateRangeDto
 import com.kaysyndikayte.allowancetracker.ui.LiveIndicatorDot
 import com.kaysyndikayte.allowancetracker.utils.DateUtils
 import com.kaysyndikayte.allowancetracker.viewmodel.AllowanceViewModel
+import com.kaysyndikayte.allowancetracker.ui.theme.ThemeToggleAction
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -34,7 +35,8 @@ fun HistoryScreen(viewModel: AllowanceViewModel, onBack: () -> Unit, onSelectRan
                 title = { Text("All Date Ranges") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
-                }
+                },
+                actions = { ThemeToggleAction() }
             )
         }
     ) { padding ->

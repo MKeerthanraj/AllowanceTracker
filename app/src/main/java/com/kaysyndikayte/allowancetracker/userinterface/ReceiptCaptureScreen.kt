@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import com.kaysyndikayte.allowancetracker.ui.theme.ThemeToggleAction
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,7 +34,14 @@ fun ReceiptCaptureScreen(
         ActivityResultContracts.GetContent()
     ) { uri -> uri?.let { onImageReady(it) } }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Scan receipt") }) }) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Scan receipt") },
+                actions = { ThemeToggleAction() }
+            )
+        }
+    ) { padding ->
         Column(
             modifier = Modifier.padding(padding).fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,

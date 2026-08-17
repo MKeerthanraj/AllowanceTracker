@@ -26,6 +26,7 @@ import com.kaysyndikayte.allowancetracker.utils.ReceiptParser
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import com.kaysyndikayte.allowancetracker.ui.RecordTransactionDialog
+import com.kaysyndikayte.allowancetracker.ui.theme.ThemeToggleAction
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.background
@@ -109,6 +110,7 @@ fun HomeScreen(
                     IconButton(onClick = onOpenHistory) { Icon(Icons.Filled.History, contentDescription = "History") }
                     IconButton(onClick = onOpenAnalytics) { Icon(Icons.Filled.BarChart, contentDescription = "Analytics") }
                     IconButton(onClick = { showNewRangeDialog = true }) { Icon(Icons.Filled.Add, contentDescription = "New Range") }
+                    ThemeToggleAction()
                 }
             )
         }

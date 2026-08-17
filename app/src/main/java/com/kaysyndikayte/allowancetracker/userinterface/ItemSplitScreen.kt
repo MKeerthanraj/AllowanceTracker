@@ -17,6 +17,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.kaysyndikayte.allowancetracker.logic.ReceiptItem
 import com.kaysyndikayte.allowancetracker.logic.SplitCalculator
+import com.kaysyndikayte.allowancetracker.ui.theme.ThemeToggleAction
 import java.math.BigDecimal
 import java.util.UUID
 
@@ -57,7 +58,8 @@ fun ItemSplitScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                actions = { ThemeToggleAction() }
             )
         },
         floatingActionButton = {

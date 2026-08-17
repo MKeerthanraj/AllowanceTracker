@@ -19,6 +19,8 @@ import com.kaysyndikayte.allowancetracker.ui.AppNavHost
 import com.kaysyndikayte.allowancetracker.userinterface.AuthScreen
 import com.kaysyndikayte.allowancetracker.repository.AuthRepository
 import com.kaysyndikayte.allowancetracker.viewmodel.AllowanceViewModelFactory
+import com.kaysyndikayte.allowancetracker.ui.theme.AllowanceTrackerTheme
+import com.kaysyndikayte.allowancetracker.ui.theme.ThemeViewModel
 import io.github.jan.supabase.auth.status.SessionStatus
 
 class MainActivity : ComponentActivity() {
@@ -56,7 +58,17 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AllowanceTrackerApp(sharedImageUri: Uri?, onImageConsumed: () -> Unit) {
-    MaterialTheme {
+    val themeViewModel = viewModel<ThemeViewModel>(
+        factory = ThemeViewModel.Factory(
+            androidx.compose.ui.platform.LocalContext.current.applicationContext as android.app.Application
+        )
+    )
+    val themeMode by themeViewModel.themeMode.collectAsState()
+
+    AllowanceTrackerTheme(
+        themeMode = themeMode,
+        onToggle = { currentlyDark -> themeViewModel.toggle(currentlyDark) }
+    ) {
         Surface {
             // AuthRepository is cheap to construct (wraps the Supabase client singleton),
             // remember{} avoids recreating it on every recomposition.
