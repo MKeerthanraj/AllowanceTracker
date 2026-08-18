@@ -41,6 +41,10 @@ fun GroupDetailScreen(
     var inviteCode by remember { mutableStateOf("") }
     val context = LocalContext.current
     var expenseHistory by remember { mutableStateOf<List<com.kaysyndikayte.allowancetracker.data.GroupExpenseDetail>>(emptyList()) }
+    val expenseRepository = remember { com.kaysyndikayte.allowancetracker.repository.ExpenseRepository() }
+    var showSettleUp by remember { mutableStateOf(false) }
+    var isSettling by remember { mutableStateOf(false) }
+    var settleError by remember { mutableStateOf<String?>(null) }
 
     // inside refresh():
     suspend fun refresh() {
@@ -99,7 +103,22 @@ fun GroupDetailScreen(
                     Icon(Icons.Filled.Share, contentDescription = "Share invite code")
                 }
             }
-            Text("Balances", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Balances",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                // Only meaningful when you owe somebody -- you can't record a payment
+                // somebody else made to you.
+                TextButton(
+                    onClick = { settleError = null; showSettleUp = true },
+                    enabled = balances.values.any { it.signum() < 0 }
+                ) { Text("Settle up") }
+            }
 
             if (balances.isEmpty()) {
                 Text("All settled up", modifier = Modifier.padding(horizontal = 16.dp))
@@ -130,5 +149,40 @@ fun GroupDetailScreen(
                 }
             }
         }
+    }
+
+    if (showSettleUp) {
+        SettleUpDialog(
+            members = members,
+            balances = balances,
+            isSaving = isSettling,
+            errorMessage = settleError,
+            onConfirm = { paidToUserId, amount ->
+                scope.launch {
+                    isSettling = true
+                    settleError = null
+                    try {
+                        val paidToName = members.find { it.id == paidToUserId }?.display_name
+                        expenseRepository.recordSettlement(
+                            groupId = groupId,
+                            paidByUserId = myUserId,
+                            paidToUserId = paidToUserId,
+                            amount = amount,
+                            note = if (paidToName != null) "Cash settlement to $paidToName" else "Cash settlement"
+                        )
+                        showSettleUp = false
+                        // Balances come from the server view, so re-read rather than
+                        // adjusting the local copy and hoping the two agree.
+                        refresh()
+                    } catch (e: Exception) {
+                        settleError = e.message
+                            ?: "Couldn't record that payment. Check your connection and try again."
+                    } finally {
+                        isSettling = false
+                    }
+                }
+            },
+            onDismiss = { showSettleUp = false }
+        )
     }
 }

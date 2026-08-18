@@ -46,6 +46,41 @@ class ExpenseRepository {
         }
     }
 
+    /**
+     * A cash settlement is recorded as an ordinary expense paid by whoever handed over the
+     * money, with a single split against whoever received it. group_balances is a read-only
+     * view over expenses + expense_splits -- nothing in the app writes it -- so a settlement
+     * shaped this way nets straight off the payer's debt without any schema change.
+     *
+     * Deliberately not a delete or an edit of the original expenses: the history stays
+     * intact and the payment shows up in the group activity like Splitwise does it.
+     */
+    suspend fun recordSettlement(
+        groupId: String,
+        paidByUserId: String,
+        paidToUserId: String,
+        amount: BigDecimal,
+        note: String
+    ) {
+        require(paidByUserId != paidToUserId) { "Can't settle up with yourself" }
+        require(amount.signum() > 0) { "Settlement amount must be more than zero" }
+
+        val expense = client.postgrest["expenses"].insert(
+            ExpenseInsert(
+                group_id = groupId,
+                paid_by = paidByUserId,
+                reason = note,
+                category = "SETTLEMENT",
+                amount = amount.toDouble(),
+                split_type = "settlement"
+            )
+        ) { select() }.decodeSingle<ExpenseRow>()
+
+        client.postgrest["expense_splits"].insert(
+            SplitInsert(expense.id, paidToUserId, amount.toDouble())
+        )
+    }
+
     suspend fun saveItemizedSplit(
         groupId: String, paidBy: String, reason: String, category: String,
         subtotal: BigDecimal, taxAmount: BigDecimal,
