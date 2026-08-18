@@ -35,19 +35,26 @@ fun SplitConfigScreen(
     totalAmount: BigDecimal,
     expenseName: String,
     participants: List<Pair<String, String>>, // userId to displayName
+    // Who starts off in the split. Null means everyone, which is what creating an expense
+    // wants; editing passes the people already on it, so confirming an unchanged edit
+    // re-saves the same split rather than silently pulling in the rest of the group.
+    initiallyIncluded: Set<String>? = null,
     isSaving: Boolean = false,
     saveError: String? = null,
     onConfirm: (splitType: String, amounts: Map<String, BigDecimal>) -> Unit,
     onBack: () -> Unit
 ) {
     var mode by remember { mutableStateOf(SplitMode.EQUAL) }
+    var included by remember(participants, initiallyIncluded) {
+        mutableStateOf(initiallyIncluded ?: participants.map { it.first }.toSet())
+    }
     val unequalAmounts = remember { mutableStateMapOf<String, String>() }
     val shareValues = remember {
         mutableStateMapOf<String, String>().apply { participants.forEach { put(it.first, "1") } }
     }
     val percentValues = remember { mutableStateMapOf<String, String>() }
 
-    val ids = participants.map { it.first }
+    val ids = participants.map { it.first }.filter { it in included }
     val total = totalAmount.setScale(2, RoundingMode.HALF_UP)
 
     // Recomputed on every keystroke so the remaining figure below is always live.
@@ -97,13 +104,29 @@ fun SplitConfigScreen(
 
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(participants, key = { it.first }) { (id, name) ->
+                    val isIn = id in included
                     val share = state.amounts?.get(id)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(vertical = 6.dp)
                     ) {
+                        // Anyone in the group can be added to or dropped from the split here.
+                        // Editing used to be handed only the people already on the expense, so
+                        // removing somebody was permanent -- they were gone from the only list
+                        // the screen could see.
+                        Checkbox(
+                            checked = isIn,
+                            onCheckedChange = {
+                                included = if (isIn) included - id else included + id
+                            },
+                            enabled = !isSaving
+                        )
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(name)
+                            Text(
+                                name,
+                                color = if (isIn) MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             // Everyone sees their real figure, including the person who picks
                             // up the leftover paisa on an amount that won't divide evenly.
                             if (share != null) {
@@ -114,8 +137,8 @@ fun SplitConfigScreen(
                                 )
                             }
                         }
-                        when (mode) {
-                            SplitMode.EQUAL -> Unit
+                        when (if (isIn) mode else null) {
+                            null, SplitMode.EQUAL -> Unit
                             SplitMode.UNEQUAL -> OutlinedTextField(
                                 value = unequalAmounts[id] ?: "",
                                 onValueChange = { unequalAmounts[id] = filterAmountInput(it) },
@@ -267,7 +290,7 @@ private fun computeSplit(
     percentValues: Map<String, String>
 ): SplitState {
     if (ids.isEmpty()) {
-        return SplitState(null, BigDecimal.ZERO, "Nobody is part of this expense")
+        return SplitState(null, BigDecimal.ZERO, "Include at least one person in this split")
     }
     if (total.signum() <= 0) {
         return SplitState(null, BigDecimal.ZERO, "The expense total must be more than zero")

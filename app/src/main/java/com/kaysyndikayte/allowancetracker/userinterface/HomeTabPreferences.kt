@@ -2,7 +2,9 @@ package com.kaysyndikayte.allowancetracker.userinterface
 
 import android.app.Application
 import android.content.Context
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.AndroidViewModel
@@ -11,6 +13,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -18,7 +21,15 @@ import kotlinx.coroutines.launch
 
 enum class HomeTab { ALLOWANCE, GROUPS }
 
-private val Context.homeTabDataStore by preferencesDataStore(name = "home_tab_prefs")
+/**
+ * An unreadable preferences file -- a write interrupted by a force-stop, a bad restore from
+ * backup -- otherwise throws out of the flow on first read. That would be a launch crash over
+ * which tab to show, so a corrupt file is thrown away and the default applies instead.
+ */
+private val Context.homeTabDataStore by preferencesDataStore(
+    name = "home_tab_prefs",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }
+)
 
 private val SELECTED_TAB_KEY = stringPreferencesKey("selected_home_tab")
 
@@ -32,12 +43,18 @@ private val SELECTED_TAB_KEY = stringPreferencesKey("selected_home_tab")
  */
 class HomeTabPreferences(private val context: Context) {
 
-    val selectedTab: Flow<HomeTab> = context.homeTabDataStore.data.map { prefs ->
-        when (prefs[SELECTED_TAB_KEY]) {
-            HomeTab.GROUPS.name -> HomeTab.GROUPS
-            else -> HomeTab.ALLOWANCE
+    val selectedTab: Flow<HomeTab> = context.homeTabDataStore.data
+        .map { prefs ->
+            when (prefs[SELECTED_TAB_KEY]) {
+                HomeTab.GROUPS.name -> HomeTab.GROUPS
+                else -> HomeTab.ALLOWANCE
+            }
         }
-    }
+        // The corruption handler covers a damaged file; this covers everything else the read
+        // can throw (an IOException on a full or unreadable disk). Remembering the wrong tab
+        // is a far smaller problem than never emitting one, which leaves MainScreen on its
+        // full-screen spinner with no way out.
+        .catch { emit(HomeTab.ALLOWANCE) }
 
     suspend fun setSelectedTab(tab: HomeTab) {
         context.homeTabDataStore.edit { prefs ->
@@ -59,7 +76,8 @@ class HomeTabViewModel(application: Application) : AndroidViewModel(application)
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     fun select(tab: HomeTab) {
-        viewModelScope.launch { preferences.setSelectedTab(tab) }
+        // Failing to remember the tab must not take the app down with it.
+        viewModelScope.launch { runCatching { preferences.setSelectedTab(tab) } }
     }
 
     class Factory(private val application: Application) : ViewModelProvider.Factory {

@@ -2,11 +2,15 @@
 -- Any member of the expense's group may edit or delete the expense, its splits,
 -- its items, and each item's participants.
 --
--- Run this once in the Supabase SQL editor. Without these, PostgREST silently
+-- Run this in the Supabase SQL editor. Without these, PostgREST silently
 -- "succeeds" while deleting/updating nothing, which is exactly the
 -- "missing DELETE permission on expense_items" error the app raises.
+--
+-- Safe to re-run: each policy is dropped first, so applying only part of the file
+-- and coming back to it later works.
 
 -- expenses: edit (reason/amount/split_type/subtotal/tax_amount) and delete
+drop policy if exists "Group members can update expenses" on public.expenses;
 create policy "Group members can update expenses"
 on public.expenses for update to authenticated
 using (
@@ -24,6 +28,7 @@ with check (
   )
 );
 
+drop policy if exists "Group members can delete expenses" on public.expenses;
 create policy "Group members can delete expenses"
 on public.expenses for delete to authenticated
 using (
@@ -36,6 +41,7 @@ using (
 
 -- expense_splits: the app upserts changed amounts (INSERT ... ON CONFLICT UPDATE,
 -- which needs an UPDATE policy) and deletes rows for people removed from a split.
+drop policy if exists "Group members can update splits" on public.expense_splits;
 create policy "Group members can update splits"
 on public.expense_splits for update to authenticated
 using (
@@ -57,6 +63,7 @@ with check (
   )
 );
 
+drop policy if exists "Group members can delete splits" on public.expense_splits;
 create policy "Group members can delete splits"
 on public.expense_splits for delete to authenticated
 using (
@@ -70,6 +77,7 @@ using (
 );
 
 -- expense_items: re-saving a receipt replaces the item rows wholesale.
+drop policy if exists "Group members can delete expense items" on public.expense_items;
 create policy "Group members can delete expense items"
 on public.expense_items for delete to authenticated
 using (
@@ -84,6 +92,7 @@ using (
 
 -- expense_item_participants: these reference expense_items with no ON DELETE
 -- CASCADE, so the app deletes them first; it needs permission to do so.
+drop policy if exists "Group members can delete item participants" on public.expense_item_participants;
 create policy "Group members can delete item participants"
 on public.expense_item_participants for delete to authenticated
 using (
@@ -107,3 +116,20 @@ using (
 --   add constraint personal_transactions_source_expense_id_fkey
 --   foreign key (source_expense_id) references public.expenses(id)
 --   on delete set null;
+
+-- The app upserts splits with an explicit conflict target of (expense_id, user_id).
+-- That target has to be backed by a unique constraint or Postgres rejects the upsert,
+-- so assert it here rather than relying on the primary key happening to be those two
+-- columns. If the table already carries that primary key this is a no-op.
+--
+-- This fails if duplicate (expense_id, user_id) rows already exist -- which they can,
+-- on a database where the DELETE policies were missing while edits were attempted.
+-- Clear them first, keeping one row per person per expense:
+--
+--   delete from public.expense_splits a
+--   using public.expense_splits b
+--   where a.expense_id = b.expense_id
+--     and a.user_id = b.user_id
+--     and a.ctid > b.ctid;
+create unique index if not exists expense_splits_expense_user_key
+  on public.expense_splits (expense_id, user_id);

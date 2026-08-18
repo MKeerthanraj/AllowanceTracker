@@ -105,7 +105,10 @@ fun ReceiptFlowHost(
             taxAmount = current.receipt.tax.toBigDecimal(),
             groupMembers = members,
             isSaving = isSaving,
-            onConfirm = { expenseName, items, amounts ->
+            // taxAmount is what the user left in the Tax field, which is not necessarily what
+            // the parser read off the receipt -- saving the parsed figure meant a corrected tax
+            // reached the splits but not the expense total.
+            onConfirm = { expenseName, items, taxAmount, amounts ->
                 scope.launch {
                     isSaving = true
                     try {
@@ -116,7 +119,7 @@ fun ReceiptFlowHost(
                             reason = expenseName,
                             category = "FOOD",
                             subtotal = subtotal,
-                            taxAmount = current.receipt.tax.toBigDecimal(),
+                            taxAmount = taxAmount,
                             items = items,
                             amounts = amounts
                         )

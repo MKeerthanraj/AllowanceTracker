@@ -44,10 +44,15 @@ fun MainScreen(
             LocalContext.current.applicationContext as Application
         )
     )
-    val selectedTab by tabViewModel.selectedTab.collectAsState()
+    val storedTab by tabViewModel.selectedTab.collectAsState()
+
+    // An image shared in from another app is only picked up by HomeScreen, so it outranks the
+    // remembered tab. Without this, sharing a receipt while Groups was the last tab used did
+    // nothing visible, and the receipt flow then ambushed the user the next time they happened
+    // to tap Allowance.
+    val tab = if (sharedImageUri != null) HomeTab.ALLOWANCE else storedTab
 
     // null while the stored tab is still being read off disk -- see HomeTabViewModel.
-    val tab = selectedTab
     if (tab == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()

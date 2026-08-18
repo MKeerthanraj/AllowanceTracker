@@ -50,18 +50,59 @@ fun GroupDetailScreen(
     var editExpenseError by remember { mutableStateOf<String?>(null) }
     var isSettling by remember { mutableStateOf(false) }
     var settleError by remember { mutableStateOf<String?>(null) }
+    var loadError by remember { mutableStateOf<String?>(null) }
 
-    // inside refresh():
     suspend fun refresh() {
         isLoading = true
-        members = groupRepository.getGroupMembers(groupId)
-        balances = groupRepository.getNetBalances(groupId, myUserId)
-        inviteCode = groupRepository.getInviteCode(groupId)
-        expenseHistory = groupRepository.getGroupExpenseHistory(groupId)
-        isLoading = false
+        try {
+            members = groupRepository.getGroupMembers(groupId)
+            balances = groupRepository.getNetBalances(groupId, myUserId)
+            inviteCode = groupRepository.getInviteCode(groupId)
+            expenseHistory = groupRepository.getGroupExpenseHistory(groupId)
+            loadError = null
+        } finally {
+            // Without this the screen stayed on its spinner for good if any one of those
+            // queries threw: no error, no content, nothing to tap.
+            isLoading = false
+        }
     }
 
-    LaunchedEffect(groupId) { refresh() }
+    /**
+     * Reloading is not the same operation as saving, and it fails for its own reasons. Letting
+     * it throw here would either kill the process (from the LaunchedEffect) or report a
+     * successful edit as a failed one.
+     */
+    suspend fun refreshSafely() {
+        try {
+            refresh()
+        } catch (e: Exception) {
+            loadError = e.message ?: "Couldn't load this group. Check your connection."
+        }
+    }
+
+    /**
+     * Every edit runs the same shape: hold the dialog, clear the last error, do the work,
+     * close, reload. Reloading sits outside the try so a reload failure is reported as what it
+     * is rather than as a change that didn't save.
+     */
+    fun runExpenseEdit(failureMessage: String, work: suspend () -> Unit) {
+        scope.launch {
+            isEditingExpense = true
+            editExpenseError = null
+            try {
+                work()
+                selectedExpense = null
+            } catch (e: Exception) {
+                editExpenseError = e.message ?: failureMessage
+                return@launch
+            } finally {
+                isEditingExpense = false
+            }
+            refreshSafely()
+        }
+    }
+
+    LaunchedEffect(groupId) { refreshSafely() }
 
     Scaffold(
         topBar = {
@@ -84,6 +125,21 @@ fun GroupDetailScreen(
         }
 
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            loadError?.let { message ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { scope.launch { refreshSafely() } }) { Text("Retry") }
+                }
+            }
+
             Text("Members", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             Row(modifier = Modifier.padding(horizontal = 16.dp).horizontalScroll(rememberScrollState())) {
                 members.forEach { member ->
@@ -172,82 +228,38 @@ fun GroupDetailScreen(
                 if (paidTo == null) {
                     editExpenseError = "This payment has no recipient recorded, so it can't be edited."
                 } else {
-                    scope.launch {
-                        isEditingExpense = true
-                        editExpenseError = null
-                        try {
-                            expenseRepository.updateSettlementAmount(expense.id, paidTo, amount)
-                            selectedExpense = null
-                            refresh()
-                        } catch (e: Exception) {
-                            editExpenseError = e.message
-                                ?: "Couldn't save that change. Check your connection and try again."
-                        } finally {
-                            isEditingExpense = false
-                        }
+                    runExpenseEdit("Couldn't save that change. Check your connection and try again.") {
+                        expenseRepository.updateSettlementAmount(expense.id, paidTo, amount)
                     }
                 }
             },
             onSaveSplit = { reason, totalAmount, splitType, amounts ->
-                scope.launch {
-                    isEditingExpense = true
-                    editExpenseError = null
-                    try {
-                        expenseRepository.updateSplit(
-                            expenseId = expense.id,
-                            reason = reason,
-                            totalAmount = totalAmount,
-                            splitType = splitType,
-                            amounts = amounts
-                        )
-                        selectedExpense = null
-                        refresh()
-                    } catch (e: Exception) {
-                        editExpenseError = e.message
-                            ?: "Couldn't save those changes. Check your connection and try again."
-                    } finally {
-                        isEditingExpense = false
-                    }
+                runExpenseEdit("Couldn't save those changes. Check your connection and try again.") {
+                    expenseRepository.updateSplit(
+                        expenseId = expense.id,
+                        reason = reason,
+                        totalAmount = totalAmount,
+                        splitType = splitType,
+                        amounts = amounts
+                    )
                 }
             },
             onSaveItemized = { reason, items, taxAmount, amounts ->
-                scope.launch {
-                    isEditingExpense = true
-                    editExpenseError = null
-                    try {
-                        val subtotal = items.fold(java.math.BigDecimal.ZERO) { acc, i -> acc.add(i.price) }
-                        expenseRepository.updateItemizedSplit(
-                            expenseId = expense.id,
-                            reason = reason,
-                            subtotal = subtotal,
-                            taxAmount = taxAmount,
-                            items = items,
-                            amounts = amounts
-                        )
-                        selectedExpense = null
-                        refresh()
-                    } catch (e: Exception) {
-                        editExpenseError = e.message
-                            ?: "Couldn't save those changes. Check your connection and try again."
-                    } finally {
-                        isEditingExpense = false
-                    }
+                runExpenseEdit("Couldn't save those changes. Check your connection and try again.") {
+                    val subtotal = items.fold(java.math.BigDecimal.ZERO) { acc, i -> acc.add(i.price) }
+                    expenseRepository.updateItemizedSplit(
+                        expenseId = expense.id,
+                        reason = reason,
+                        subtotal = subtotal,
+                        taxAmount = taxAmount,
+                        items = items,
+                        amounts = amounts
+                    )
                 }
             },
             onDelete = {
-                scope.launch {
-                    isEditingExpense = true
-                    editExpenseError = null
-                    try {
-                        expenseRepository.deleteExpense(expense.id)
-                        selectedExpense = null
-                        refresh()
-                    } catch (e: Exception) {
-                        editExpenseError = e.message
-                            ?: "Couldn't delete that. Check your connection and try again."
-                    } finally {
-                        isEditingExpense = false
-                    }
+                runExpenseEdit("Couldn't delete that. Check your connection and try again.") {
+                    expenseRepository.deleteExpense(expense.id)
                 }
             },
             onDismiss = { selectedExpense = null }
@@ -274,15 +286,16 @@ fun GroupDetailScreen(
                             note = if (paidToName != null) "Cash settlement to $paidToName" else "Cash settlement"
                         )
                         showSettleUp = false
-                        // Balances come from the server view, so re-read rather than
-                        // adjusting the local copy and hoping the two agree.
-                        refresh()
                     } catch (e: Exception) {
                         settleError = e.message
                             ?: "Couldn't record that payment. Check your connection and try again."
+                        return@launch
                     } finally {
                         isSettling = false
                     }
+                    // Balances come from the server view, so re-read rather than adjusting the
+                    // local copy and hoping the two agree.
+                    refreshSafely()
                 }
             },
             onDismiss = { showSettleUp = false }

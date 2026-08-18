@@ -67,11 +67,12 @@ fun ExpenseDetailScreen(
                     initialName = expense.reason,
                     saveError = errorMessage,
                     isSaving = isSaving,
-                    onConfirm = { name, items, amounts ->
-                        val subtotal = items.fold(BigDecimal.ZERO) { acc, i -> acc.add(i.price) }
-                        // ItemSplitScreen already folded tax into the amounts it returns; the
-                        // tax figure it used comes back out through the totals it computed.
-                        onSaveItemized(name, items, expense.taxAmount, amounts)
+                    // The tax comes back from the screen rather than being read off the
+                    // expense again: the Tax field is editable, and reusing the saved figure
+                    // meant an edited tax reached expense_splits but never the expense row,
+                    // leaving the two disagreeing about the total.
+                    onConfirm = { name, items, tax, amounts ->
+                        onSaveItemized(name, items, tax, amounts)
                     },
                     onBack = { editing = false }
                 )
@@ -79,7 +80,11 @@ fun ExpenseDetailScreen(
                 editing -> SplitConfigScreen(
                     totalAmount = expense.amount.setScale(2, RoundingMode.HALF_UP),
                     expenseName = expense.reason,
-                    participants = expense.participants.map { it.userId to it.displayName },
+                    // The whole group, not just whoever is on the expense today. Passing only
+                    // the current participants meant nobody could ever be added, and anybody
+                    // removed in one edit was unrecoverable in every edit after it.
+                    participants = groupMembers,
+                    initiallyIncluded = expense.participants.map { it.userId }.toSet(),
                     isSaving = isSaving,
                     saveError = errorMessage,
                     onConfirm = { splitType, amounts ->

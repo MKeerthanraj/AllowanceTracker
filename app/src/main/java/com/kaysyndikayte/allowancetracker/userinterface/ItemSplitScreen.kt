@@ -37,7 +37,7 @@ fun ItemSplitScreen(
     initialName: String = "",
     saveError: String? = null,
     isSaving: Boolean = false,
-    onConfirm: (name: String, items: List<ReceiptItem>, amounts: Map<String, BigDecimal>) -> Unit,
+    onConfirm: (name: String, items: List<ReceiptItem>, taxAmount: BigDecimal, amounts: Map<String, BigDecimal>) -> Unit,
     onBack: () -> Unit
 ) {
     // Keyed on the incoming list so reopening a saved receipt restores its items, and each
@@ -54,7 +54,9 @@ fun ItemSplitScreen(
         )
     }
     var expenseName by remember(initialName) { mutableStateOf(initialName) }
-    var taxText by remember { mutableStateOf(taxAmount.toPlainString()) }
+    // Keyed like the items: reopening a saved receipt has to show the tax it was saved with,
+    // not whatever the field happened to hold the first time this screen was composed.
+    var taxText by remember(taxAmount) { mutableStateOf(taxAmount.toPlainString()) }
     var editingItem by remember { mutableStateOf<EditableItem?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -181,9 +183,13 @@ fun ItemSplitScreen(
                     }
                     error = null
                     val results = SplitCalculator.itemized(receiptItems, tax)
+                    // The tax that went into these amounts goes back with them. Handing the
+                    // caller its own original figure instead let an edited tax reach the
+                    // splits but never the expense row, so the two stopped agreeing.
                     onConfirm(
                         expenseName.trim(),
                         receiptItems,
+                        tax,
                         results.associate { it.userId to it.amount }
                     )
                 },

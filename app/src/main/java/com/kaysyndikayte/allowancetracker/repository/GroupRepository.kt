@@ -58,6 +58,7 @@ private data class ItemParticipantRow(val user_id: String)
 @Serializable
 private data class ItemWithParticipantsRow(
     val id: String,
+    val expense_id: String,
     val name: String,
     val price: Double,
     val expense_item_participants: List<ItemParticipantRow> = emptyList()
@@ -201,36 +202,44 @@ class GroupRepository {
 
         val members = getGroupMembers(groupId)
         val nameById = members.associate { it.id to it.display_name }
+        val expenseIds = expenses.map { it.id }
+
+        // One query for the whole page rather than one per expense. Read on every refresh --
+        // including after each edit -- so a busy group was previously dozens of sequential
+        // round trips before the screen came back.
+        val splitsByExpense = client.postgrest["expense_splits"]
+            .select(Columns.raw("expense_id, user_id, amount_owed, profiles(display_name)")) {
+                filter { isIn("expense_id", expenseIds) }
+            }
+            .decodeList<SplitWithProfileRow>()
+            .groupBy { it.expense_id }
+
+        // Only receipt splits have item rows, so don't ask for the rest.
+        val itemizedIds = expenses.filter { it.split_type == "itemized" }.map { it.id }
+        val itemsByExpense = if (itemizedIds.isEmpty()) emptyMap() else {
+            client.postgrest["expense_items"]
+                .select(Columns.raw("id, expense_id, name, price, expense_item_participants(user_id)")) {
+                    filter { isIn("expense_id", itemizedIds) }
+                }
+                .decodeList<ItemWithParticipantsRow>()
+                .groupBy { it.expense_id }
+        }
 
         return expenses.map { exp ->
-            val splits = client.postgrest["expense_splits"]
-                .select(Columns.raw("expense_id, user_id, amount_owed, profiles(display_name)")) {
-                    filter { eq("expense_id", exp.id) }
-                }
-                .decodeList<SplitWithProfileRow>()
+            val splits = splitsByExpense[exp.id].orEmpty()
 
             // paid_by isn't necessarily in expense_splits (payer often isn't owed anything if
             // they were part of the split too — but if they weren't in the split at all,
             // we still want their name via nameById fallback).
             val paidByName = nameById[exp.paid_by] ?: "Someone"
 
-            // Only receipt splits have item rows; skip the round trip for the rest.
-            val items = if (exp.split_type == "itemized") {
-                client.postgrest["expense_items"]
-                    .select(Columns.raw("id, name, price, expense_item_participants(user_id)")) {
-                        filter { eq("expense_id", exp.id) }
-                    }
-                    .decodeList<ItemWithParticipantsRow>()
-                    .map { row ->
-                        com.kaysyndikayte.allowancetracker.data.ExpenseItemDetail(
-                            id = row.id,
-                            name = row.name,
-                            price = row.price.toBigDecimal(),
-                            participantIds = row.expense_item_participants.map { it.user_id }
-                        )
-                    }
-            } else {
-                emptyList()
+            val items = itemsByExpense[exp.id].orEmpty().map { row ->
+                com.kaysyndikayte.allowancetracker.data.ExpenseItemDetail(
+                    id = row.id,
+                    name = row.name,
+                    price = row.price.toBigDecimal(),
+                    participantIds = row.expense_item_participants.map { it.user_id }
+                )
             }
 
             GroupExpenseDetail(
