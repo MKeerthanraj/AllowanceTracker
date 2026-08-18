@@ -49,6 +49,7 @@ fun ReceiptFlowHost(
     var step by remember { mutableStateOf<FlowStep>(FlowStep.Capture) }
     var members by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var paidBy by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
 
     LaunchedEffect(groupId) {
         members = groupRepository.getGroupMembers(groupId).map { it.id to it.display_name }
@@ -103,20 +104,31 @@ fun ReceiptFlowHost(
             parsedItems = current.receipt.items.map { it.name to it.price.toBigDecimal() },
             taxAmount = current.receipt.tax.toBigDecimal(),
             groupMembers = members,
+            isSaving = isSaving,
             onConfirm = { expenseName, items, amounts ->
                 scope.launch {
-                    val subtotal = items.fold(BigDecimal.ZERO) { acc, item -> acc.add(item.price) }
-                    expenseRepository.saveItemizedSplit(
-                        groupId = groupId,
-                        paidBy = paidBy,
-                        reason = expenseName,
-                        category = "FOOD",
-                        subtotal = subtotal,
-                        taxAmount = current.receipt.tax.toBigDecimal(),
-                        items = items,
-                        amounts = amounts
-                    )
-                    onDone()
+                    isSaving = true
+                    try {
+                        val subtotal = items.fold(BigDecimal.ZERO) { acc, item -> acc.add(item.price) }
+                        expenseRepository.saveItemizedSplit(
+                            groupId = groupId,
+                            paidBy = paidBy,
+                            reason = expenseName,
+                            category = "FOOD",
+                            subtotal = subtotal,
+                            taxAmount = current.receipt.tax.toBigDecimal(),
+                            items = items,
+                            amounts = amounts
+                        )
+                        onDone()
+                    } catch (e: Exception) {
+                        // This save is a long chain of inserts; a failure part-way used to
+                        // escape the coroutine and take the whole app down.
+                        isSaving = false
+                        step = FlowStep.Error(
+                            e.message ?: "Couldn't save the split. Check your connection and try again."
+                        )
+                    }
                 }
             },
             onBack = onBack

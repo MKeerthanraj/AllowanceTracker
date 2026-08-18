@@ -35,6 +35,8 @@ fun SplitConfigScreen(
     totalAmount: BigDecimal,
     expenseName: String,
     participants: List<Pair<String, String>>, // userId to displayName
+    isSaving: Boolean = false,
+    saveError: String? = null,
     onConfirm: (splitType: String, amounts: Map<String, BigDecimal>) -> Unit,
     onBack: () -> Unit
 ) {
@@ -152,11 +154,32 @@ fun SplitConfigScreen(
                 )
             }
 
+            saveError?.let {
+                Text(
+                    it,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
             Button(
                 onClick = { state.amounts?.let { onConfirm(mode.name.lowercase(), it) } },
-                enabled = canConfirm,
+                enabled = canConfirm && !isSaving,
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-            ) { Text("Confirm split") }
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Saving split...")
+                } else {
+                    Text("Confirm split")
+                }
+            }
         }
     }
 }

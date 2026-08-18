@@ -34,6 +34,7 @@ fun ItemSplitScreen(
     parsedItems: List<Pair<String, BigDecimal>>,
     taxAmount: BigDecimal,
     groupMembers: List<Pair<String, String>>,
+    isSaving: Boolean = false,
     onConfirm: (name: String, items: List<ReceiptItem>, amounts: Map<String, BigDecimal>) -> Unit,
     onBack: () -> Unit
 ) {
@@ -61,11 +62,6 @@ fun ItemSplitScreen(
                 },
                 actions = { ThemeToggleAction() }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Add item")
-            }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
@@ -140,6 +136,16 @@ fun ItemSplitScreen(
                 }
             }
 
+            TextButton(
+                onClick = { showAddDialog = true },
+                enabled = !isSaving,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.width(4.dp))
+                Text("Add an item")
+            }
+
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
             Button(
@@ -169,8 +175,23 @@ fun ItemSplitScreen(
                         results.associate { it.userId to it.amount }
                     )
                 },
+                enabled = !isSaving,
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-            ) { Text("Confirm split") }
+            ) {
+                // Saving fires a long chain of Supabase inserts; without this the screen
+                // just sat there looking frozen after the tap.
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Saving split...")
+                } else {
+                    Text("Confirm split")
+                }
+            }
         }
     }
 
