@@ -32,7 +32,7 @@ private data class GroqMessage(val role: String, val content: String)
 
 @Serializable
 private data class GroqRequest(
-    val model: String = "llama-3.3-70b-versatile",
+    val model: String = "openai/gpt-oss-20b",
     val messages: List<GroqMessage>,
     val temperature: Double = 0.0,
     val response_format: GroqResponseFormat = GroqResponseFormat()
