@@ -43,6 +43,11 @@ fun GroupDetailScreen(
     var expenseHistory by remember { mutableStateOf<List<com.kaysyndikayte.allowancetracker.data.GroupExpenseDetail>>(emptyList()) }
     val expenseRepository = remember { com.kaysyndikayte.allowancetracker.repository.ExpenseRepository() }
     var showSettleUp by remember { mutableStateOf(false) }
+    var selectedExpense by remember {
+        mutableStateOf<com.kaysyndikayte.allowancetracker.data.GroupExpenseDetail?>(null)
+    }
+    var isEditingExpense by remember { mutableStateOf(false) }
+    var editExpenseError by remember { mutableStateOf<String?>(null) }
     var isSettling by remember { mutableStateOf(false) }
     var settleError by remember { mutableStateOf<String?>(null) }
 
@@ -144,11 +149,109 @@ fun GroupDetailScreen(
             } else {
                 LazyColumn(modifier = Modifier.weight(1f)) {
                     items(expenseHistory, key = { it.id }) { expense ->
-                        ExpenseHistoryCard(expense = expense, currentUserId = myUserId)
+                        ExpenseHistoryCard(
+                            expense = expense,
+                            currentUserId = myUserId,
+                            onLongPress = { editExpenseError = null; selectedExpense = expense }
+                        )
                     }
                 }
             }
         }
+    }
+
+    selectedExpense?.let { expense ->
+        ExpenseDetailScreen(
+            expense = expense,
+            currentUserId = myUserId,
+            groupMembers = members.map { it.id to it.display_name },
+            isSaving = isEditingExpense,
+            errorMessage = editExpenseError,
+            onSaveSettlement = { amount ->
+                val paidTo = expense.participants.firstOrNull()?.userId
+                if (paidTo == null) {
+                    editExpenseError = "This payment has no recipient recorded, so it can't be edited."
+                } else {
+                    scope.launch {
+                        isEditingExpense = true
+                        editExpenseError = null
+                        try {
+                            expenseRepository.updateSettlementAmount(expense.id, paidTo, amount)
+                            selectedExpense = null
+                            refresh()
+                        } catch (e: Exception) {
+                            editExpenseError = e.message
+                                ?: "Couldn't save that change. Check your connection and try again."
+                        } finally {
+                            isEditingExpense = false
+                        }
+                    }
+                }
+            },
+            onSaveSplit = { reason, totalAmount, splitType, amounts ->
+                scope.launch {
+                    isEditingExpense = true
+                    editExpenseError = null
+                    try {
+                        expenseRepository.updateSplit(
+                            expenseId = expense.id,
+                            reason = reason,
+                            totalAmount = totalAmount,
+                            splitType = splitType,
+                            amounts = amounts
+                        )
+                        selectedExpense = null
+                        refresh()
+                    } catch (e: Exception) {
+                        editExpenseError = e.message
+                            ?: "Couldn't save those changes. Check your connection and try again."
+                    } finally {
+                        isEditingExpense = false
+                    }
+                }
+            },
+            onSaveItemized = { reason, items, taxAmount, amounts ->
+                scope.launch {
+                    isEditingExpense = true
+                    editExpenseError = null
+                    try {
+                        val subtotal = items.fold(java.math.BigDecimal.ZERO) { acc, i -> acc.add(i.price) }
+                        expenseRepository.updateItemizedSplit(
+                            expenseId = expense.id,
+                            reason = reason,
+                            subtotal = subtotal,
+                            taxAmount = taxAmount,
+                            items = items,
+                            amounts = amounts
+                        )
+                        selectedExpense = null
+                        refresh()
+                    } catch (e: Exception) {
+                        editExpenseError = e.message
+                            ?: "Couldn't save those changes. Check your connection and try again."
+                    } finally {
+                        isEditingExpense = false
+                    }
+                }
+            },
+            onDelete = {
+                scope.launch {
+                    isEditingExpense = true
+                    editExpenseError = null
+                    try {
+                        expenseRepository.deleteExpense(expense.id)
+                        selectedExpense = null
+                        refresh()
+                    } catch (e: Exception) {
+                        editExpenseError = e.message
+                            ?: "Couldn't delete that. Check your connection and try again."
+                    } finally {
+                        isEditingExpense = false
+                    }
+                }
+            },
+            onDismiss = { selectedExpense = null }
+        )
     }
 
     if (showSettleUp) {

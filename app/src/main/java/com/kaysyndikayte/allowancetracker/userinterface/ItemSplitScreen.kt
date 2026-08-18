@@ -31,17 +31,29 @@ private data class EditableItem(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ItemSplitScreen(
-    parsedItems: List<Pair<String, BigDecimal>>,
+    initialItems: List<ReceiptItem>,
     taxAmount: BigDecimal,
     groupMembers: List<Pair<String, String>>,
+    initialName: String = "",
+    saveError: String? = null,
     isSaving: Boolean = false,
     onConfirm: (name: String, items: List<ReceiptItem>, amounts: Map<String, BigDecimal>) -> Unit,
     onBack: () -> Unit
 ) {
-    var items by remember {
-        mutableStateOf(parsedItems.map { (name, price) -> EditableItem(name = name, price = price) })
+    // Keyed on the incoming list so reopening a saved receipt restores its items, and each
+    // item's people, exactly as they were recorded.
+    var items by remember(initialItems) {
+        mutableStateOf(
+            initialItems.map {
+                EditableItem(
+                    name = it.name,
+                    price = it.price,
+                    participantIds = it.participantIds.toSet()
+                )
+            }
+        )
     }
-    var expenseName by remember { mutableStateOf("") }
+    var expenseName by remember(initialName) { mutableStateOf(initialName) }
     var taxText by remember { mutableStateOf(taxAmount.toPlainString()) }
     var editingItem by remember { mutableStateOf<EditableItem?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -146,7 +158,7 @@ fun ItemSplitScreen(
                 Text("Add an item")
             }
 
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            (error ?: saveError)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
             Button(
                 onClick = {

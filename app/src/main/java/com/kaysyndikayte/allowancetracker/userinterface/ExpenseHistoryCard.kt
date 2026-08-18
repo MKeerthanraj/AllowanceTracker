@@ -1,5 +1,7 @@
 package com.kaysyndikayte.allowancetracker.userinterface
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -9,13 +11,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kaysyndikayte.allowancetracker.data.GroupExpenseDetail
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ExpenseHistoryCard(expense: GroupExpenseDetail, currentUserId: String) {
+fun ExpenseHistoryCard(
+    expense: GroupExpenseDetail,
+    currentUserId: String,
+    onLongPress: () -> Unit = {}
+) {
     var expanded by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-        onClick = { expanded = !expanded }
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            // Tap still expands the breakdown in place; long press opens the full editor.
+            .combinedClickable(
+                onClick = { expanded = !expanded },
+                onLongClick = onLongPress
+            )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -48,7 +48,19 @@ private data class ExpenseWithSplitsRow(
     val amount: Double,
     val split_type: String,
     val paid_by: String,
-    val created_at: String
+    val created_at: String,
+    val tax_amount: Double = 0.0
+)
+
+@Serializable
+private data class ItemParticipantRow(val user_id: String)
+
+@Serializable
+private data class ItemWithParticipantsRow(
+    val id: String,
+    val name: String,
+    val price: Double,
+    val expense_item_participants: List<ItemParticipantRow> = emptyList()
 )
 
 @Serializable
@@ -202,6 +214,25 @@ class GroupRepository {
             // we still want their name via nameById fallback).
             val paidByName = nameById[exp.paid_by] ?: "Someone"
 
+            // Only receipt splits have item rows; skip the round trip for the rest.
+            val items = if (exp.split_type == "itemized") {
+                client.postgrest["expense_items"]
+                    .select(Columns.raw("id, name, price, expense_item_participants(user_id)")) {
+                        filter { eq("expense_id", exp.id) }
+                    }
+                    .decodeList<ItemWithParticipantsRow>()
+                    .map { row ->
+                        com.kaysyndikayte.allowancetracker.data.ExpenseItemDetail(
+                            id = row.id,
+                            name = row.name,
+                            price = row.price.toBigDecimal(),
+                            participantIds = row.expense_item_participants.map { it.user_id }
+                        )
+                    }
+            } else {
+                emptyList()
+            }
+
             GroupExpenseDetail(
                 id = exp.id,
                 reason = exp.reason,
@@ -218,7 +249,9 @@ class GroupRepository {
                         ?: "Someone",
                         amountOwed = it.amount_owed.toBigDecimal()
                     )
-                }
+                },
+                taxAmount = exp.tax_amount.toBigDecimal(),
+                items = items
             )
         }
     }

@@ -101,7 +101,7 @@ fun ReceiptFlowHost(
         }
 
         is FlowStep.Review -> ItemSplitScreen(
-            parsedItems = current.receipt.items.map { it.name to it.price.toBigDecimal() },
+            initialItems = current.receipt.items.map { ReceiptItem(it.name, it.price.toBigDecimal()) },
             taxAmount = current.receipt.tax.toBigDecimal(),
             groupMembers = members,
             isSaving = isSaving,
