@@ -31,17 +31,32 @@ private data class EditableItem(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ItemSplitScreen(
-    parsedItems: List<Pair<String, BigDecimal>>,
+    initialItems: List<ReceiptItem>,
     taxAmount: BigDecimal,
     groupMembers: List<Pair<String, String>>,
-    onConfirm: (name: String, items: List<ReceiptItem>, amounts: Map<String, BigDecimal>) -> Unit,
+    initialName: String = "",
+    saveError: String? = null,
+    isSaving: Boolean = false,
+    onConfirm: (name: String, items: List<ReceiptItem>, taxAmount: BigDecimal, amounts: Map<String, BigDecimal>) -> Unit,
     onBack: () -> Unit
 ) {
-    var items by remember {
-        mutableStateOf(parsedItems.map { (name, price) -> EditableItem(name = name, price = price) })
+    // Keyed on the incoming list so reopening a saved receipt restores its items, and each
+    // item's people, exactly as they were recorded.
+    var items by remember(initialItems) {
+        mutableStateOf(
+            initialItems.map {
+                EditableItem(
+                    name = it.name,
+                    price = it.price,
+                    participantIds = it.participantIds.toSet()
+                )
+            }
+        )
     }
-    var expenseName by remember { mutableStateOf("") }
-    var taxText by remember { mutableStateOf(taxAmount.toPlainString()) }
+    var expenseName by remember(initialName) { mutableStateOf(initialName) }
+    // Keyed like the items: reopening a saved receipt has to show the tax it was saved with,
+    // not whatever the field happened to hold the first time this screen was composed.
+    var taxText by remember(taxAmount) { mutableStateOf(taxAmount.toPlainString()) }
     var editingItem by remember { mutableStateOf<EditableItem?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -61,11 +76,6 @@ fun ItemSplitScreen(
                 },
                 actions = { ThemeToggleAction() }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Add item")
-            }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
@@ -140,7 +150,17 @@ fun ItemSplitScreen(
                 }
             }
 
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            TextButton(
+                onClick = { showAddDialog = true },
+                enabled = !isSaving,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.width(4.dp))
+                Text("Add an item")
+            }
+
+            (error ?: saveError)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
             Button(
                 onClick = {
@@ -163,14 +183,33 @@ fun ItemSplitScreen(
                     }
                     error = null
                     val results = SplitCalculator.itemized(receiptItems, tax)
+                    // The tax that went into these amounts goes back with them. Handing the
+                    // caller its own original figure instead let an edited tax reach the
+                    // splits but never the expense row, so the two stopped agreeing.
                     onConfirm(
                         expenseName.trim(),
                         receiptItems,
+                        tax,
                         results.associate { it.userId to it.amount }
                     )
                 },
+                enabled = !isSaving,
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-            ) { Text("Confirm split") }
+            ) {
+                // Saving fires a long chain of Supabase inserts; without this the screen
+                // just sat there looking frozen after the tap.
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Saving split...")
+                } else {
+                    Text("Confirm split")
+                }
+            }
         }
     }
 

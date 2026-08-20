@@ -37,6 +37,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Without this getIntent() keeps returning the intent the activity was first created
+        // with, so a second shared receipt is read as whatever the first launch carried.
+        setIntent(intent)
         handleIncomingIntent(intent)
     }
 
