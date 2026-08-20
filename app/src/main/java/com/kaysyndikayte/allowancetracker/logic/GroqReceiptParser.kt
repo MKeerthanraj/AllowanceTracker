@@ -35,7 +35,15 @@ private data class GroqRequest(
     val model: String = "openai/gpt-oss-20b",
     val messages: List<GroqMessage>,
     val temperature: Double = 0.0,
-    val response_format: GroqResponseFormat = GroqResponseFormat()
+    val response_format: GroqResponseFormat = GroqResponseFormat(),
+    // gpt-oss-20b is a reasoning model — without these, it can spend its whole token
+    // budget on internal "thinking" before writing the JSON answer, especially on longer
+    // or messier receipts, and the response gets cut off mid-JSON. That's what shows up
+    // as "json_validate_failed" with an empty failed_generation: Groq got a truncated
+    // completion, not genuinely malformed JSON.
+    val reasoning_effort: String = "low",
+    val reasoning_format: String = "hidden",
+    val max_completion_tokens: Int = 1000
 )
 
 @Serializable
@@ -114,6 +122,14 @@ object GroqReceiptParser {
         android.util.Log.d("GroqReceiptParser", "Status: ${httpResponse.status}, Body: $rawBody")
 
         if (!httpResponse.status.isSuccess()) {
+            val isJsonValidationFailure = rawBody.contains("json_validate_failed")
+            if (isJsonValidationFailure) {
+                android.util.Log.e(
+                    "GroqReceiptParser",
+                    "Groq couldn't produce valid JSON for this receipt (likely truncated by " +
+                            "reasoning token usage). Raw OCR length: ${rawOcrText.length}. Body: $rawBody"
+                )
+            }
             throw IllegalStateException("Groq API error (${httpResponse.status}): $rawBody")
         }
 
@@ -121,6 +137,14 @@ object GroqReceiptParser {
         val content = response.choices.firstOrNull()?.message?.content
             ?: throw IllegalStateException("Empty response from Groq")
 
-        return json.decodeFromString<ParsedReceipt>(content)
+        return try {
+            json.decodeFromString<ParsedReceipt>(content)
+        } catch (e: Exception) {
+            android.util.Log.e("GroqReceiptParser", "Model content wasn't valid ParsedReceipt JSON: $content", e)
+            throw IllegalStateException(
+                "Couldn't read the receipt from this photo. Try a clearer photo, or enter it manually.",
+                e
+            )
+        }
     }
-    }
+}
